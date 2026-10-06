@@ -2,54 +2,41 @@
     GuidedSEIR
 
 A module containing an implementation of the phylodynamic filter for
-an SEIR model, using a filter guide and "soft" proposals.  That is, when
-population-process events occur, the guide can steer those events
-preferentially onto (or away from) particular branches, but the overall
-event rate remains equal to that of the underlying population process.
+an SEIR model, using a filter guide and "semisoft" proposals.  That
+is, when population-process events occur, the guide can steer those
+events preferentially onto (or away from) particular branches, but the
+overall event rate remains equal to that of the underlying population
+process.
 """
 module GuidedSEIR
 
 using ..PhyloPOMP
 using ..PhyloPOMP: Root, Node, Sample, Name, Prob, Time, FSMarkovProc
 
+## Construct an enumeration of the demes for this model.
 @demes Demes Expos Infec
 using .Demes: Expos, Infec, DemeSet
 
 include("seir_trees.jl")
+## Model-specific functions.
 
-"""
-    knowledge!(v; deme, type, time)
-
-This function should return true if the guide probabilities will be fixed
-at this node and false otherwise. If the former, it should fill the vector
-`v` with an appropriate probability vector.
-"""
-knowledge!(
-    v; deme, type, time,
-) = begin
-    if type==Sample || type==Node
-        demekron!(v,Infec)
-        true
-    else
-        false
-    end
+## gives the occupancy of each deme
+deme_occupancy(;E, I, _...,) = begin
+    ;E, I
 end
 
-check(
-    gen::Genealogy,
-) = begin
-    for node ∈ eachindex(gen)
-        n = gen[node]
-        if n.type == Root
-            @assert length(n.children)==1 "wrong number of children ($(length(n.children)) != 1) at root $(n.name), t=$(n.slate)"
-        elseif n.type == Sample
-            @assert length(n.children)<2 "too many children ($(length(n.children)) > 1) at sample $(n.name), t=$(n.time)"
-        elseif n.type == Node
-            @assert length(n.children)==2 "wrong number of children ($(length(n.children)) ≠ 2) at node $(n.name), t=$(n.time)"
-        end
-    end
-    nothing
+## Is the population state compatible with the genealogy?
+live_condition((;S, E, I, R), cols) = begin
+    ellE, ellI = ell(cols)
+    I ≥ ellI && E ≥ ellE
 end
+
+## Event-rates section.
+##
+## Each of these functions computes one or more event-rates (α in the
+## paper) and fills the array `alpha` with these. In addition, it
+## returns any decay term associated.  These are only called by the
+## function `event_rates!` defined at the bottom of this section.
 
 transmission!(alpha, (;S, E, I, R), cols; β, pop, _...,) = begin
     alpha[1] = β*S*I/pop
@@ -87,14 +74,12 @@ event_rates!(alpha, state, cols; kwargs...) = begin
     decay
 end
 
-deme_occupancy(;E, I, _...,) = begin
-    ;E, I
-end
-
-live_condition((;S, E, I, R), cols) = begin
-    ellE, ellI = ell(cols)
-    I ≥ ellI && E ≥ ellE
-end
+## Singular-part section.
+##
+## The following functions deal with the cases of having a root,
+## sample, or branch at an observed event time. They are called in
+## turn by the `singular_part!` function defined at the bottom of this
+## section.
 
 singular_root!(
     node::GuideNode{F,N,D}, cols, state;
@@ -149,17 +134,16 @@ inline_sample!(node, cols, state; ψ, _...) = begin
     ;live, ll, state
 end
 
-branch_options(x::AbstractArray{Prob,2}) = begin
-    [x[1,1]*x[2,2], x[1,2]*x[2,1]]
-end
-
-
 singular_sample!(node, cols, state; kwargs...) = begin
     if length(node.chillins) == 0
         terminal_sample!(node, cols, state; kwargs...)
     elseif length(node.chillins) == 1
         inline_sample!(node, cols, state; kwargs...)
     end
+end
+
+branch_options(x::AbstractArray{Prob,2}) = begin
+    [x[1,1]*x[2,2], x[1,2]*x[2,1]]
 end
 
 singular_branch!(node, cols, (;S, E, I, R); β, pop, _...) = begin
@@ -204,6 +188,14 @@ singular_part!(
         ;live, ll, state
     end
 end
+
+## Regular-part section.
+##
+## The following functions execute the appropriate actions for each
+## kind of event (see Event-rate section above) during the integration
+## of the regular part of the filter equation. These are called in
+## turn by the `regular_part!` function defined at the bottom of the
+## section.
 
 regular_transmission!(
     t, guide, node, cols, (;S, E, I, R);
@@ -295,6 +287,15 @@ regular_part!(
     ll, state
 end
 
+"""
+    seir_rinit(;S0, E0, I0, R0, pop, _...)
+
+Initializes the state of the population process.  The parameters `S0`,
+`E0`, `I0`, `R0` are taken to be barycentric coordinates for a
+position on the lattice simplex with sum `pop`.  That is, the returned
+population state is a tuple `(S,E,I,R)` of integers, where `S + E + I
++ R = pop`.
+"""
 seir_rinit(; S0, E0, I0, R0, pop, _...) =
     barycentric(Int64,(S=S0,E=E0,I=I0,R=R0),pop)
 
@@ -303,7 +304,8 @@ seir_rinit(; S0, E0, I0, R0, pop, _...) =
          χ = 0.0, pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08)
 
 Constructs a pomp object based on the genealogy `g` and finite-state
-Markov guiding process `m`.
+Markov guiding process `m`. The keyword arguments are model
+parameters.
 """
 filter_pomp(
     gen::Genealogy,
@@ -362,6 +364,41 @@ filter_pomp(
             live ? ll : Prob(-Inf)
         end,
     )
+end
+
+"""
+    knowledge!(v; deme, type, time)
+
+This function should return true if the guide probabilities will be fixed
+at this node and false otherwise. If the former, it should fill the vector
+`v` with an appropriate probability vector.
+"""
+knowledge!(
+    v; deme, type, time,
+) = begin
+    if type==Sample || type==Node
+        demekron!(v,Infec)
+        true
+    else
+        false
+    end
+end
+
+## Check the genealogy for incompatibility with the model.
+check(
+    gen::Genealogy,
+) = begin
+    for node ∈ eachindex(gen)
+        n = gen[node]
+        if n.type == Root
+            @assert length(n.children)==1 "wrong number of children ($(length(n.children)) != 1) at root $(n.name), t=$(n.slate)"
+        elseif n.type == Sample
+            @assert length(n.children)<2 "too many children ($(length(n.children)) > 1) at sample $(n.name), t=$(n.time)"
+        elseif n.type == Node
+            @assert length(n.children)==2 "wrong number of children ($(length(n.children)) ≠ 2) at node $(n.name), t=$(n.time)"
+        end
+    end
+    nothing
 end
 
 end
