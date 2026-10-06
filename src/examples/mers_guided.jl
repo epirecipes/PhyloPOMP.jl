@@ -16,46 +16,29 @@ using ..PhyloPOMP: Root, Node, Sample, Name, Prob, Time, FSMarkovProc
 @demes Demes Camel Human
 using .Demes: Camel, Human, DemeSet
 
+## the MERS data:
 include("mers_tree.jl")
 
-"""
-    knowledge!(v; deme, type, time)
 
-Return `true` if the guide probabilities are fixed at this node (and,
-if so, fill `v` with the appropriate probability vector); return
-`false` otherwise.
+## Model-specific functions.
 
-For MERS the deme is fixed exactly when the genealogy supplies host
-metadata, i.e. at the sample tips. This is identical to the default
-`known_deme!`.
-"""
-knowledge!(
-    v; deme, type, time,
-) = begin
-    if ismissing(deme)
-        false
-    else
-        demekron!(v, deme)
-        true
-    end
+## gives the occupancy of each deme
+deme_occupancy(;Ic, Ih, _...,) = begin
+    ;Ic, Ih
 end
 
-check(
-    gen::Genealogy,
-) = begin
-    for node ∈ eachindex(gen)
-        n = gen[node]
-        if n.type == Root
-            @assert length(n.children)==1 "wrong number of children ($(length(n.children)) != 1) at root $(n.name), t=$(n.slate)"
-        elseif n.type == Sample
-            @assert length(n.children)<1 "too many children ($(length(n.children)) > 0) at sample $(n.name), t=$(n.time)"
-            @assert n.deme in [Human, Camel] "sample node with unknown deme"
-        elseif n.type == Node
-            @assert length(n.children)==2 "wrong number of children ($(length(n.children)) ≠ 2) at node $(n.name), t=$(n.time)"
-        end
-    end
-    nothing
+## Is the population state compatible with the genealogy?
+livecondition((;Sc, Ic, Sh, Ih), cols) = begin
+    ellC, ellH = ell(cols)
+    Ic ≥ ellC && Ih ≥ ellH
 end
+
+## Event-rates section.
+##
+## Each of these functions computes one or more event-rates (α in the
+## paper) and fills the array `alpha` with these. In addition, it
+## returns any decay term associated.  These are only called by the
+## function `event_rates!` defined at the bottom of this section.
 
 transmission!(
     alpha, (;Sc, Ic, Sh, Ih), cols;
@@ -110,14 +93,12 @@ event_rates!(alpha, state, cols; kwargs...) = begin
     decay
 end
 
-deme_occupancy(;Ic, Ih, _...,) = begin
-    ;Ic, Ih
-end
-
-livecondition((;Sc, Ic, Sh, Ih), cols) = begin
-    ellC, ellH = ell(cols)
-    Ic ≥ ellC && Ih ≥ ellH
-end
+## Singular-part section.
+##
+## The following functions deal with the cases of having a root,
+## sample, or branch at an observed event time. They are called in
+## turn by the `singular_part!` function defined at the bottom of this
+## section.
 
 singular_root!(
     gennode, guidenode::GuideNode{F,N,D}, cols, state;
@@ -261,6 +242,14 @@ singular_part!(
         ;live, ll, state
     end
 end
+
+## Regular-part section.
+##
+## The following functions execute the appropriate actions for each
+## kind of event (see Event-rate section above) during the integration
+## of the regular part of the filter equation. These are called in
+## turn by the `regular_part!` function defined at the bottom of the
+## section.
 
 regular_transmission_cc!(
     t, guide, node, cols, (;Sc, Ic, Sh, Ih),
@@ -413,15 +402,11 @@ regular_part!(
     ll, state
 end
 
+## Initializes the state of the population process.
 mers_rinit(; Sc0, Sh0, Ic0, Ih0, Nc, Nh, _...,) = begin
-    mc = Nc / (Sc0 + Ic0)
-    mh = Nh / (Sh0 + Ih0)
-    (
-        Sc = round(Int64, mc*Float64(Sc0)),
-        Ic = round(Int64, mc*Float64(Ic0)),
-        Sh = round(Int64, mh*Float64(Sh0)),
-        Ih = round(Int64, mh*Float64(Ih0)),
-    )
+    camel = barycentric(Int64,(Sc=Sc0,Ic=Ic0),Nc)
+    human = barycentric(Int64,(Sh=Sh0,Ih=Ih0),Nh)
+    (;camel..., human...,)
 end
 
 """
@@ -499,6 +484,45 @@ filter_pomp(
             live ? ll : Prob(-Inf)
         end,
     )
+end
+
+"""
+    knowledge!(v; deme, type, time)
+
+Return `true` if the guide probabilities are fixed at this node (and,
+if so, fill `v` with the appropriate probability vector); return
+`false` otherwise.
+
+For MERS the deme is fixed exactly when the genealogy supplies host
+metadata, i.e. at the sample tips. This is identical to the default
+`known_deme!`.
+"""
+knowledge!(
+    v; deme, type, time,
+) = begin
+    if ismissing(deme)
+        false
+    else
+        demekron!(v, deme)
+        true
+    end
+end
+
+check(
+    gen::Genealogy,
+) = begin
+    for node ∈ eachindex(gen)
+        n = gen[node]
+        if n.type == Root
+            @assert length(n.children)==1 "wrong number of children ($(length(n.children)) != 1) at root $(n.name), t=$(n.slate)"
+        elseif n.type == Sample
+            @assert length(n.children)<1 "too many children ($(length(n.children)) > 0) at sample $(n.name), t=$(n.time)"
+            @assert n.deme in [Human, Camel] "sample node with unknown deme"
+        elseif n.type == Node
+            @assert length(n.children)==2 "wrong number of children ($(length(n.children)) ≠ 2) at node $(n.name), t=$(n.time)"
+        end
+    end
+    nothing
 end
 
 end
