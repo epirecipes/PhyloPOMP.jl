@@ -11,7 +11,7 @@ using PhyloPOMP: NaiveSEIR, SoftSEIR, GuidedSEIR, HardSEIR
 import PartiallyObservedMarkovProcesses as POMP
 
 ## Regression test for kingaa/PhyloPOMP.jl#8: when every infective carries a
-## lineage (I == ellI), a transmission can still leave the colouring unchanged,
+## lineage (I == ellI), a transmission can still leave the coloring unchanged,
 ## so the proposal must give that outcome positive probability.
 
 @testset verbose=true "transmission proposal support" begin

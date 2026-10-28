@@ -42,10 +42,7 @@ transmission!(
     _...,
 ) = begin
     rate = β*S*I/pop
-    ## The "no colour change" outcome must keep positive probability even when
-    ## every infective carries a lineage (I == ellI): the infector may keep its
-    ## lineage while the infectee's is pruned (support condition of the
-    ## importance-sampling theorem).  Hence the +1.
+    ## "no color change" must remain possible when I == ellI
     pi[1] = @indicator(I > 0, (offI+1)/(I+1))
     pi[2] = @indicator(I > 0, onI/(I+1))
     alpha[1] = rate*pi[1]

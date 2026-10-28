@@ -101,7 +101,7 @@ event_rates!(
     alpha[4] = alpha[3] = σ*E
     alpha[5] = @indicator(I > ellI, γ*(I-ellI))
     alpha[6] = ω*R
-    ## "no colour change" must stay possible when I == ellI (support condition)
+    ## "no color change" must remain possible when I == ellI
     pi[1] = @indicator(I > 0, (I-ellI+1)/(I+1))
     pi[2] = @indicator(I > 0, ellI/(I+1))
     pi[3] = @indicator(E > 0, 1-ellE/E)
