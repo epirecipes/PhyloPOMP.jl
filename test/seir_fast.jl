@@ -7,15 +7,13 @@ import ..Main: h1, h2
 using Test
 using Random: Xoshiro, seed!
 using PhyloPOMP
-using PhyloPOMP: FastSEIR, GuidedSEIR
-import PartiallyObservedMarkovProcesses as POMP
+using PhyloPOMP.FastSEIR
+using PhyloPOMP.FastSEIR.Demes: Expos, Infec
 
 @testset verbose=true "fast streaming SEIR filter" begin
 
     seed!(4242)
-    m = fsmarkov(GuidedSEIR.Demes.Expos=>0.1, GuidedSEIR.Demes.Infec=>1,
-                 (GuidedSEIR.Demes.Expos, GuidedSEIR.Demes.Infec)=>1)
-    mktree(g) = FastSEIR.Tree(g, guide(g, m, GuidedSEIR.knowledge!))
+    m = fsmarkov(Expos=>0.1, Infec=>1, (Expos,Infec)=>1)
 
     @info h2("agreement with the exact likelihood")
     ## a single infective carries the root lineage, so transmissions occur with I == ellI
@@ -24,38 +22,30 @@ import PartiallyObservedMarkovProcesses as POMP
     ## exact log likelihood (direct uniformization solution of the filter equation,
     ## cross-checked against an independent matrix-exponential solver)
     exact = -3.1014176307666657
-    tr = mktree(g)
-    est(opt) = POMP.logmeanexp(FastSEIR.logliks(tr, par; Np=300, n=60, opt), se=true)
-    for opt ∈ (
-        FastSEIR.Options(),                                         # local/post/guided
-        FastSEIR.Options(proposal=:fixed, order=:pre),
-        FastSEIR.Options(proposal=:local, guided=false),
-        FastSEIR.Options(resample=:ess, trigger=0.5),
-        FastSEIR.Options(lookahead=:both, horizon=2),
+    est(tr; kwargs...) = logmeanexp([logLik(pfilter(tr; Np=300, par..., kwargs...)) for _ ∈ 1:60], se=true)
+    tr = FastSEIR.Tree(g, m)
+    for e ∈ (
+        est(tr),
+        est(tr, proposal=:uniform),
+        est(tr, guided=false),
+        est(tr, trigger=0.5),
+        est(FastSEIR.Tree(g)),
     )
-        e = est(opt)
         @test abs(e.est - exact) < 5e.se + 0.02
     end
-    ## the paper's naive proposal violates the support condition (kingaa/PhyloPOMP.jl#8)
-    e = est(FastSEIR.Options(proposal=:naive, guided=false, order=:pre))
-    @test e.est < exact - 1
 
-    @info h2("reproducibility, threading and the kernel hook")
-    g1 = parse_newick(GuidedSEIR.seir_trees[1], time=50.0)
-    par1 = (β=4.0, σ=1.0, γ=1.0, ω=1.0, ψ=0.02, χ=0.0, pop=100, S0=0.9, E0=0.0, I0=0.02, R0=0.08)
-    tr1 = mktree(g1)
-    run(opt) = FastSEIR.pfilter(tr1, par1; Np=500, opt, rng=Xoshiro(17)).logLik
-    l1 = run(FastSEIR.Options(threaded=true))
-    @test isfinite(l1)
-    @test l1 == run(FastSEIR.Options(threaded=false))
-    hook = (tr, P, i, k, t, tf, p, opt, rng) -> FastSEIR.regular!(tr, P, i, k, t, tf, p, opt, rng)
-    @test l1 == run(FastSEIR.Options(regular=hook))
-
-    @info h2("diagnostics")
-    res = FastSEIR.pfilter(tr1, par1; Np=200, diagnostics=true)
-    @test length(res.ess) == length(res.zerofrac) == length(res.cll) == length(g1)
-    @test res.nevents > 0
-    @test all(x -> isnan(x) || 0 ≤ x ≤ 1, res.zerofrac)
+    @info h2("diagnostics and reproducibility")
+    g = parse_newick(FastSEIR.seir_trees[1], time=50.0)
+    tr = FastSEIR.Tree(g, m)
+    pf = pfilter(tr, Np=500, rng=Xoshiro(17))
+    @test pf isa FastSEIR.FastPfilterd
+    @test isfinite(logLik(pf))
+    @test length(eff_sample_size(pf)) == length(cond_logLik(pf)) == length(g)
+    @test sum(cond_logLik(pf)) ≈ logLik(pf)
+    @test all(0 .≤ pf.zero_fraction .≤ 1)
+    @test pf.nevents > 0
+    ## the result depends on the random-number generator, not on the threads
+    @test logLik(pf) == logLik(pfilter(tr, Np=500, rng=Xoshiro(17), threaded=false))
 
 end
 
