@@ -1,0 +1,5 @@
+nthreads,Np,threaded,median_sec,reproducible
+8,1000,false,0.272731333,true
+8,1000,true,0.095862667,true
+8,10000,false,2.723702791,true
+8,10000,true,0.767641417,true

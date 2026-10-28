@@ -157,6 +157,13 @@ end
 - `order`: `:pre` applies each genealogical event after resampling (as in the
   POMP-based filters); `:post` applies it before resampling.
 - `resample`: `:every` or `:ess` (resample when ESS < `trigger`·Np).
+- `lookahead`: auxiliary particle filter look-ahead used to choose ancestors
+  before the next interval (requires `order = :post`, `resample = :every`):
+  `:lineage` uses the guide's backward messages for the current coloring,
+  `:pop` a deterministic SEIR projection through the next `horizon`
+  genealogical events (integrated sampling decay and event weights), `:both`
+  their product.  The look-ahead is raised to the power `temper`; the
+  selection is corrected exactly, so the likelihood target is unchanged.
 """
 Base.@kwdef struct Options
     proposal::Symbol = :local
@@ -166,6 +173,10 @@ Base.@kwdef struct Options
     trigger::Float64 = 0.5
     nchunks::Int = 64
     threaded::Bool = true
+    ## auxiliary (look-ahead) resampling: :none, :lineage, :pop or :both
+    lookahead::Symbol = :none
+    horizon::Int = 1
+    temper::Float64 = 1.0
 end
 
 ## ----------------------------------------------------------------------
@@ -365,6 +376,88 @@ singular!(tr::Tree, P::Particles, i::Int, k::Int, p, opt::Options, rng::Abstract
 end
 
 ## ----------------------------------------------------------------------
+## look-ahead (auxiliary particle filter)
+
+## log of the guide's backward messages for the current coloring of particle i,
+## at the start of interval k (per-lineage constants cancel in the selection)
+lineage_lookahead(tr::Tree, P::Particles, i::Int, k::Int) = begin
+    tr.guided || return 0.0
+    e = exp(-tr.κ*(tr.tend[k]-tr.time[k]))
+    s = 0.0
+    @inbounds for j ∈ tr.ptr[k]:(tr.ptr[k+1]-1)
+        pE, pI = guideprobs(tr, j, e)
+        h = getbit(P.col, i, tr.lins[j]) ? pI : pE
+        s += log(max(h, 1e-300))
+    end
+    s
+end
+
+## deterministic SEIR flow with integrated sampling decay, RK4 with step ≤ hmax
+seir_rhs(S, E, I, R, p) = begin
+    (; β, σ, γ, ω, χ, pop) = p
+    inf = β*S*I/pop
+    (-inf + ω*R, inf - σ*E, σ*E - (γ+χ)*I, γ*I - ω*R)
+end
+
+flow(x::NTuple{4,Float64}, dt::Float64, p; hmax = 0.25) = begin
+    dt > 0 || return x, 0.0
+    n = max(1, ceil(Int, dt/hmax)); h = dt/n
+    S, E, I, R = x
+    decay = 0.0
+    c = p.ψ + p.χ
+    for _ ∈ 1:n
+        k1 = seir_rhs(S, E, I, R, p)
+        k2 = seir_rhs(S+h/2*k1[1], E+h/2*k1[2], I+h/2*k1[3], R+h/2*k1[4], p)
+        k3 = seir_rhs(S+h/2*k2[1], E+h/2*k2[2], I+h/2*k2[3], R+h/2*k2[4], p)
+        k4 = seir_rhs(S+h*k3[1], E+h*k3[2], I+h*k3[3], R+h*k3[4], p)
+        I1 = I + h/6*(k1[3]+2k2[3]+2k3[3]+k4[3])
+        decay += c*h*(I + 4*(I + h/2*k2[3]) + I1)/6     # Simpson on I
+        S += h/6*(k1[1]+2k2[1]+2k3[1]+k4[1])
+        E += h/6*(k1[2]+2k2[2]+2k3[2]+k4[2])
+        R += h/6*(k1[4]+2k2[4]+2k3[4]+k4[4])
+        I = I1
+        S, E, I, R = max(S,0.0), max(E,0.0), max(I,0.0), max(R,0.0)
+    end
+    (S, E, I, R), decay
+end
+
+## log of a deterministic approximation to the weight of the next `horizon`
+## intervals (regular decay + event weights) for the population state of particle i
+pop_lookahead(tr::Tree, P::Particles, i::Int, k::Int, p, horizon::Int) = begin
+    (; β, ψ, χ, pop) = p
+    M = length(tr.time)
+    x = (Float64(P.S[i]), Float64(P.E[i]), Float64(P.I[i]), Float64(P.R[i]))
+    lI = Float64(P.lI[i])
+    s = 0.0
+    for m ∈ k:min(k+horizon-1, M)
+        x, dec = flow(x, tr.tend[m]-tr.time[m], p)
+        s -= dec
+        m < M || break
+        S, E, I, R = x
+        typ = tr.type[m+1]
+        if typ == BRANCH
+            s += log(β*max(S, 0.5)/(pop*(E+1)))
+            x = (max(S-1, 0.0), E+1, I, R)
+            lI += 1
+        elseif typ == SAMPLE && tr.nch[m+1] == 0
+            s += log(ψ*max(I-lI+1, 0.5) + χ*max(I, 0.5))
+            lI -= 1
+        elseif typ == SAMPLE
+            s += log(ψ)
+        end
+    end
+    s
+end
+
+lookahead(tr::Tree, P::Particles, i::Int, k::Int, p, opt::Options) = begin
+    isfinite(P.logw[i]) || return 0.0
+    s = 0.0
+    (opt.lookahead === :lineage || opt.lookahead === :both) && (s += lineage_lookahead(tr, P, i, k))
+    (opt.lookahead === :pop || opt.lookahead === :both) && (s += pop_lookahead(tr, P, i, k, p, opt.horizon))
+    opt.temper*s
+end
+
+## ----------------------------------------------------------------------
 ## the filter
 
 """
@@ -390,6 +483,10 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
     loglik = 0.0
     seed = rand(rng, UInt64)
     post = opt.order === :post
+    apf = opt.lookahead !== :none
+    apf && @assert post && opt.resample === :every "look-ahead requires order=:post and resample=:every"
+    lg = apf ? zeros(Np) : Float64[]
+    Waux = apf ? zeros(Np) : Float64[]
     ## with :post ordering, the leading events at t0 (at least event 1) are applied
     ## first; each call uses its own RNG stream id (-j) so that no random numbers
     ## are shared with the propagation steps (stream ids k ≥ 1)
@@ -397,7 +494,7 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
     if post
         j = 1
         while j ≤ M && (j == 1 || tr.time[j] == tr.t0)
-            run_chunks!(P, Np, opt, seed, -j) do i, r, c
+            run_chunks!(P, Np, opt, seed, -j, j) do P, i, r, c, j
                 singular!(tr, P, i, j, p, opt, r)
             end
             j += 1
@@ -406,7 +503,7 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
     end
     for k ∈ k0:M
         ## propagate: (pre: event k) + regular part over interval k + (post: event k+1)
-        run_chunks!(P, Np, opt, seed, k) do i, r, c
+        run_chunks!(P, Np, opt, seed, k, k) do P, i, r, c, k
             if !post
                 singular!(tr, P, i, k, p, opt, r)
             end
@@ -437,34 +534,62 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
             ke = post ? min(k+1, M) : k
             ess[ke] = e; zf[ke] = nz/Np; cll[ke] = ll
         end
-        P.logw .= 0.0
         if opt.resample === :every || e < opt.trigger*Np
-            systematic!(ancestors, W, rng)
-            @inbounds for j ∈ 1:Np
-                copyparticle!(Q, j, P, ancestors[j])
+            if apf && k < M
+                ## auxiliary selection with look-ahead to interval k+1
+                run_chunks!(P, Np, opt, seed, k, k) do P, i, r, c, k
+                    lg[i] = W[i] > 0 ? lookahead(tr, P, i, k+1, p, opt) : -Inf
+                end
+                mx2 = -Inf
+                @inbounds for i ∈ 1:Np
+                    W[i] > 0 && (mx2 = max(mx2, lg[i]))
+                end
+                aux = 0.0
+                @inbounds for i ∈ 1:Np
+                    Waux[i] = W[i] > 0 ? W[i]*exp(lg[i]-mx2) : 0.0
+                    aux += Waux[i]
+                end
+                ## log Σ W ĝ, with ĝ shifted by exp(-mx2); the same shift enters the
+                ## corrected increments below, so it cancels in the estimate
+                loglik += log(aux)
+                Waux ./= aux
+                systematic!(ancestors, Waux, rng)
+                @inbounds for j ∈ 1:Np
+                    copyparticle!(Q, j, P, ancestors[j])
+                    Q.logw[j] = -(lg[ancestors[j]]-mx2)
+                end
+            else
+                systematic!(ancestors, W, rng)
+                @inbounds for j ∈ 1:Np
+                    copyparticle!(Q, j, P, ancestors[j])
+                end
             end
             P, Q = Q, P
             W .= 1.0/Np
+        else
+            P.logw .= 0.0
         end
     end
     (logLik = loglik, ess, zerofrac = zf, cll, type = tr.type, nevents = sum(nev))
 end
 
 ## run f(i, rng) for all particles, in parallel chunks with reproducible RNGs
-run_chunks!(f, P::Particles, Np::Int, opt::Options, seed::UInt64, k::Int) = begin
+## (P and the event index are passed to `f` explicitly so that the closure does
+## not capture variables that are reassigned in the caller, which would box them)
+run_chunks!(f, P::Particles, Np::Int, opt::Options, seed::UInt64, k::Int, kk::Int) = begin
     nc = min(opt.nchunks, Np)
     if opt.threaded && nthreads() > 1
         @threads :static for c ∈ 1:nc
             rng = Xoshiro(hash((seed, k, c)))
             for i ∈ c:nc:Np
-                f(i, rng, c)
+                f(P, i, rng, c, kk)
             end
         end
     else
         for c ∈ 1:nc
             rng = Xoshiro(hash((seed, k, c)))
             for i ∈ c:nc:Np
-                f(i, rng, c)
+                f(P, i, rng, c, kk)
             end
         end
     end
