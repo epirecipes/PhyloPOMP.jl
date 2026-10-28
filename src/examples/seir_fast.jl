@@ -390,18 +390,21 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
     loglik = 0.0
     seed = rand(rng, UInt64)
     post = opt.order === :post
-    ## with :post ordering, leading events at t0 (roots) are applied at the start
+    ## with :post ordering, the leading events at t0 (at least event 1) are applied
+    ## first; each call uses its own RNG stream id (-j) so that no random numbers
+    ## are shared with the propagation steps (stream ids k ≥ 1)
     k0 = 1
     if post
-        while k0 ≤ M && tr.time[k0] == tr.t0 && tr.type[k0] == ROOT
-            run_chunks!(P, Np, opt, seed, k0, nev) do i, r
-                singular!(tr, P, i, k0, p, opt, r)
+        j = 1
+        while j ≤ M && (j == 1 || tr.time[j] == tr.t0)
+            run_chunks!(P, Np, opt, seed, -j, nev) do i, r
+                singular!(tr, P, i, j, p, opt, r)
             end
-            k0 += 1
+            j += 1
         end
-        k0 -= 1     # interval k0 is the last root's interval
+        k0 = j-1    # interval k0 follows the last initial event
     end
-    for k ∈ max(k0,1):M
+    for k ∈ k0:M
         ## propagate: (pre: event k) + regular part over interval k + (post: event k+1)
         run_chunks!(P, Np, opt, seed, k, nev) do i, r
             if !post
@@ -452,14 +455,14 @@ run_chunks!(f, P::Particles, Np::Int, opt::Options, seed::UInt64, k::Int, nev) =
     nc = min(opt.nchunks, Np)
     if opt.threaded && nthreads() > 1
         @threads :static for c ∈ 1:nc
-            rng = Xoshiro(seed, UInt64(k), UInt64(c))
+            rng = Xoshiro(hash((seed, k, c)))
             for i ∈ c:nc:Np
                 f(i, rng)
             end
         end
     else
         for c ∈ 1:nc
-            rng = Xoshiro(seed, UInt64(k), UInt64(c))
+            rng = Xoshiro(hash((seed, k, c)))
             for i ∈ c:nc:Np
                 f(i, rng)
             end
