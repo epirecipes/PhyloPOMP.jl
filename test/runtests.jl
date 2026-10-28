@@ -18,5 +18,6 @@ h2 = s -> crayon"!bold light_yellow"("- "*s)
     include("seir_guided.jl")
     include("seir_hard.jl")
     include("seir_support.jl")
+    include("seir_exact.jl")
 
 end
