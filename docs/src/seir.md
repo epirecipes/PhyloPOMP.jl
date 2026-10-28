@@ -117,6 +117,14 @@ Order   = [:module, :function, :macro, :type, :constant]
 ```
 
 An example simulating a genealogy and computing its likelihood with the guided filter.
+## Fast streaming filter
+
+```@autodocs
+Modules = [PhyloPOMP.FastSEIR]
+Order   = [:module, :function, :macro, :type, :constant]
+```
+
+An example running the fast filter with a filter guide.
 
 ```@example
 using Random: Xoshiro
@@ -130,4 +138,11 @@ sim = SimSEIR.simulate(; β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02,
 g = sim.genealogy
 p = GuidedSEIR.filter_pomp(g, fsmarkov(Expos=>0.1, Infec=>1, (Expos,Infec)=>1))
 (nsample = sim.nsample, logLik = round(logLik(pfilter(p, Np = 1000)), digits = 1))
+using PhyloPOMP.FastSEIR
+using PhyloPOMP.FastSEIR.Demes: Expos, Infec
+
+g = parse_newick(FastSEIR.seir_trees[1], time = 50.0)
+tr = FastSEIR.Tree(g, fsmarkov(Expos=>0.1, Infec=>1, (Expos,Infec)=>1))
+pf = pfilter(tr, Np = 1000, rng = Xoshiro(351956486))
+round(logLik(pf), digits = 1)
 ```

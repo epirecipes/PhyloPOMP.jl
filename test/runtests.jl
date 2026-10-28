@@ -20,5 +20,6 @@ h2 = s -> crayon"!bold light_yellow"("- "*s)
     include("seir_support.jl")
     include("seir_exact.jl")
     include("seir_sim.jl")
+    include("seir_fast.jl")
 
 end
