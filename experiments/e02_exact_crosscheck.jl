@@ -33,8 +33,10 @@ for c ∈ cases
 end
 json_path = joinpath(RESULTS, "e02_cases.json")
 write(json_path, "[" * join(exported, ",\n") * "]")
-py = joinpath(LAB, "maths", "sympy", ".venv", "bin", "python")
-script = joinpath(LAB, "maths", "sympy", "exact_mpmath.py")
+## independent reference: python/exact_mpmath.py (needs `pip install mpmath`);
+## set ENV["PYTHON"] to choose the interpreter
+py = get(ENV, "PYTHON", "python3")
+script = joinpath(@__DIR__, "python", "exact_mpmath.py")
 pyout = read(`$py $script $json_path`, String)
 pyvals = Dict(m.captures[1] => parse(BigFloat, m.captures[2])
               for m ∈ eachmatch(r"\"(\w+)\": \"([-\d\.e]+)\"", pyout))

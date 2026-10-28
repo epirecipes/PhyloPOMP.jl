@@ -5,7 +5,6 @@ using Random, Statistics, Printf
 import PartiallyObservedMarkovProcesses as POMP
 
 const RESULTS = joinpath(@__DIR__, "results")
-const LAB = normpath(joinpath(@__DIR__, "..", "..", "lab"))
 
 ## default guide process used throughout the package tests
 default_guide() = fsmarkov(GuidedSEIR.Demes.Expos=>0.1, GuidedSEIR.Demes.Infec=>1,
