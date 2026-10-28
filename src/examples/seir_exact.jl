@@ -1,200 +1,209 @@
 """
     ExactSEIR
 
-Deterministic (non-Monte Carlo) solution of the SEIRS filter equation of
-King, Lin & Ionides (2024) for *small* populations.  It enumerates the
-joint space of population states `(S,E,I,R)` and lineage colorings, and
-integrates the filter equation exactly (by uniformization) between
-genealogical events.  It is independent of the particle-filter code and
-of any importance-sampling proposal, so it serves as a reference
-likelihood for validating the particle filters ([`NaiveSEIR`](@ref
-PhyloPOMP.NaiveSEIR), [`GuidedSEIR`](@ref PhyloPOMP.GuidedSEIR), ...).
+Exact computation of the likelihood of a genealogy under the SEIRS model
+for *small* populations.  The filter equation of King, Lin & Ionides is
+solved deterministically on the joint space of population states
+`(S,E,I,R)` and lineage colorings, by uniformization between
+genealogical events.  Since no importance sampling is involved, the
+result can serve as a reference for checking the particle filters (e.g.,
+[`GuidedSEIR`](@ref PhyloPOMP.GuidedSEIR)).
 
-The cost grows like (number of population states) × 2^(number of
-lineages), so it is only practical for tiny examples.
+The size of the state space is (number of population states) ×
+2^(number of lineages present), so only small examples are feasible.
 """
 module ExactSEIR
 
 using ..PhyloPOMP
-using ..PhyloPOMP: Root, Node, Sample, Name, Time, Genealogy
-import PartiallyObservedMarkovProcesses as POMP
+using ..PhyloPOMP: Root, Node, Sample, Name, Time
 
-const PopState = NTuple{4,Int}
-const Key = Tuple{PopState,UInt64}
+## A state is a population state together with a coloring, represented as
+## a bitmask: bit b-1 is set if and only if lineage b is in deme I.
+const State = Tuple{NTuple{4,Int},UInt64}
 
-## joint state space for a given set of lineages; mask bit k set ⇔ lins[k] in deme I
+bit(b::Integer) = one(UInt64) << (b-1)
+
+isinfec(m::UInt64, b::Integer) = m & bit(b) ≠ 0
+
+"""
+    Space(lins, totals)
+
+The feasible states when the lineages `lins` are present and the total
+population size is one of `totals`.
+"""
 struct Space
     lins::Vector{Name}
-    states::Vector{Key}
-    index::Dict{Key,Int}
-end
-
-Space(lins::Vector{Name}, totals) = begin
-    A = length(lins)
-    @assert A ≤ 20 "too many lineages for the exact solver"
-    states = Key[]
-    for N ∈ totals, S ∈ 0:N, E ∈ 0:(N-S), I ∈ 0:(N-S-E)
-        R = N-S-E-I
-        for m ∈ UInt64(0):UInt64(2^A-1)
-            lI = count_ones(m)
-            if E ≥ A-lI && I ≥ lI
+    states::Vector{State}
+    index::Dict{State,Int}
+    Space(lins::Vector{Name}, totals) = begin
+        states = State[]
+        cols = colorings(lins)
+        for N ∈ totals, S ∈ 0:N, E ∈ 0:(N-S), I ∈ 0:(N-S-E), m ∈ cols
+            R = N-S-E-I
+            ellI = count_ones(m)
+            ellE = length(lins)-ellI
+            if E ≥ ellE && I ≥ ellI
                 push!(states, ((S,E,I,R), m))
             end
         end
+        new(lins, states, Dict(s => k for (k,s) ∈ enumerate(states)))
     end
-    Space(lins, states, Dict(s => k for (k,s) ∈ enumerate(states)))
 end
 
-## sparse weighted generator: dw/dt = G w with G = offdiag + Diagonal(diag)
+## all colorings of the lineages `lins`
+colorings(lins) = map(0:(2^length(lins)-1)) do k
+    m = zero(UInt64)
+    for (j,b) ∈ enumerate(lins)
+        if (k >> (j-1)) & 1 == 1
+            m |= bit(b)
+        end
+    end
+    m
+end
+
+"""
+    Generator(sp, params)
+
+The generator of the regular part of the filter equation on the state
+space `sp`: `dw/dt = Q w`, where `Q` has off-diagonal entries given by
+`(from, to, rate)` triples and diagonal `diag`.
+"""
 struct Generator
-    src::Vector{Int}
-    dst::Vector{Int}
+    from::Vector{Int}
+    to::Vector{Int}
     rate::Vector{Float64}
     diag::Vector{Float64}
-end
-
-inI(m::UInt64, k::Int) = (m >> (k-1)) & one(UInt64) == one(UInt64)
-setI(m::UInt64, k::Int) = m | (one(UInt64) << (k-1))
-setE(m::UInt64, k::Int) = m & ~(one(UInt64) << (k-1))
-
-Generator(sp::Space, p) = begin
-    (; β, σ, γ, ω, ψ, χ, pop) = p
-    A = length(sp.lins)
-    src = Int[]; dst = Int[]; rate = Float64[]
-    diag = zeros(Float64, length(sp.states))
-    add!(j, key, r) = if r > 0
-        push!(src, j); push!(dst, sp.index[key]); push!(rate, r)
-    end
-    for (j, ((S,E,I,R), m)) ∈ enumerate(sp.states)
-        lI = count_ones(m)
-        lE = A-lI
-        diag[j] = -(β*S*I/pop + σ*E + γ*I + ω*R + (ψ+χ)*I)
-        if S ≥ 1 && I ≥ 1               # transmission
-            a = β*S*I/pop
-            E2 = E+1
-            add!(j, ((S-1,E2,I,R), m), a*(E2-lE)/E2)
-            for k ∈ 1:A
-                if inI(m,k)              # lineage k moves I → E
-                    add!(j, ((S-1,E2,I,R), setE(m,k)), a*(I-(lI-1))/(E2*I))
+    Generator(sp::Space, p) = begin
+        (; β, σ, γ, ω, ψ, χ, pop) = p
+        from = Int[]; to = Int[]; rate = Float64[]
+        diag = Vector{Float64}(undef,length(sp.states))
+        for (j, ((S,E,I,R), m)) ∈ enumerate(sp.states)
+            ellI = count_ones(m)
+            ellE = length(sp.lins)-ellI
+            diag[j] = -(β*S*I/pop + σ*E + γ*I + ω*R + (ψ+χ)*I)
+            add!(x, m, r) = if r > 0
+                push!(from, j); push!(to, sp.index[(x, m)]); push!(rate, r)
+            end
+            if S > 0 && I > 0               # transmission
+                a = β*S*I/pop
+                add!((S-1,E+1,I,R), m, a*(E+1-ellE)/(E+1))
+                for b ∈ sp.lins
+                    if isinfec(m,b)         # lineage b passes to the infectee
+                        add!((S-1,E+1,I,R), m & ~bit(b), a*(I-ellI+1)/((E+1)*I))
+                    end
                 end
             end
-        end
-        if E ≥ 1                         # progression
-            a = σ*E
-            I2 = I+1
-            if E-1 ≥ lE
-                add!(j, ((S,E-1,I2,R), m), a*(I2-lI)/I2)
-            end
-            for k ∈ 1:A
-                if !inI(m,k)             # lineage k moves E → I
-                    add!(j, ((S,E-1,I2,R), setI(m,k)), a/I2)
+            if E > 0                        # progression
+                a = σ*E
+                if E > ellE
+                    add!((S,E-1,I+1,R), m, a*(I+1-ellI)/(I+1))
+                end
+                for b ∈ sp.lins
+                    if !isinfec(m,b)        # lineage b progresses
+                        add!((S,E-1,I+1,R), m | bit(b), a/(I+1))
+                    end
                 end
             end
+            if I > ellI                     # recovery
+                add!((S,E,I-1,R+1), m, γ*I)
+            end
+            if R > 0                        # waning
+                add!((S+1,E,I,R-1), m, ω*R)
+            end
         end
-        if I ≥ 1 && I-1 ≥ lI             # recovery of a non-lineage-carrier
-            add!(j, ((S,E,I-1,R+1), m), γ*I)
-        end
-        if R ≥ 1                         # waning
-            add!(j, ((S+1,E,I,R-1), m), ω*R)
-        end
+        new(from, to, rate, diag)
     end
-    Generator(src, dst, rate, diag)
 end
 
-## y = M x with M = I + G/Λ (all entries of M nonnegative)
-uniform_step!(y, x, G::Generator, Λ) = begin
-    @inbounds for j ∈ eachindex(x)
-        y[j] = x[j]*(1+G.diag[j]/Λ)
-    end
-    @inbounds for k ∈ eachindex(G.src)
-        y[G.dst[k]] += G.rate[k]/Λ*x[G.src[k]]
-    end
-    y
-end
+"""
+    propagate!(w, Q, dt)
 
-## advance w by dt, renormalizing; returns the log of the mass change
-propagate!(w::Vector{Float64}, G::Generator, dt::Real) = begin
-    dt > 0 || return 0.0
-    Λ = maximum(abs, G.diag; init = 0.0)
-    Λ > 0 || return 0.0
-    nsub = max(1, ceil(Int, Λ*dt/16))
-    h = dt/nsub
-    λh = Λ*h
-    logscale = 0.0
-    term = similar(w)
-    tmp = similar(w)
-    acc = similar(w)
-    for _ ∈ 1:nsub
-        copyto!(term, w)
+Advance `w` by `dt` under generator `Q` by uniformization.  `w` is
+normalized on return; the log of its total mass is returned.
+"""
+propagate!(
+    w::Vector{Float64},
+    Q::Generator,
+    dt::Real,
+) = begin
+    Λ = maximum(abs, Q.diag; init=0.0)
+    (dt > 0 && Λ > 0) || return 0.0
+    ## with M = I + Q/Λ, exp(Q h) = Σₖ Pois(k; Λh) Mᵏ, all terms nonnegative
+    nstep = ceil(Int, Λ*dt/16)
+    λh = Λ*dt/nstep
+    term = similar(w); next = similar(w); acc = similar(w)
+    logmass = 0.0
+    for _ ∈ 1:nstep
+        term .= w
         pk = exp(-λh)
         acc .= pk .* term
         k = 0
-        while true
+        while k ≤ λh || pk*sum(term) > 1e-17*sum(acc)
             k += 1
-            uniform_step!(tmp, term, G, Λ)
-            term, tmp = tmp, term
+            @assert k < 100_000 "uniformization failed to converge"
+            next .= term .* (1 .+ Q.diag ./ Λ)
+            for (f, t, r) ∈ zip(Q.from, Q.to, Q.rate)
+                next[t] += r/Λ*term[f]
+            end
+            term, next = next, term
             pk *= λh/k
-            contrib = pk*sum(term)
             acc .+= pk .* term
-            (k > λh && contrib ≤ 1e-17*sum(acc)) && break
-            k > 100_000 && error("uniformization failed to converge")
         end
         s = sum(acc)
         s > 0 || return -Inf
         w .= acc ./ s
-        logscale += log(s)
+        logmass += log(s)
     end
-    logscale
+    logmass
 end
 
-## apply the singular operator of genealogical node `n`, mapping w from `sp` to `sp2`
-singular(w, sp::Space, sp2::Space, type, parlin, chillins, p) = begin
+## Apply the singular part of the filter equation for a genealogical node
+## (with parent lineage `parlin` and child lineages `chillins`), mapping the
+## weights `w` on `sp` to weights on `sp2`.
+singular(
+    w::Vector{Float64},
+    sp::Space,
+    sp2::Space,
+    type,
+    parlin::Name,
+    chillins::Vector{Name},
+    p,
+) = begin
     (; β, ψ, χ, pop) = p
-    w2 = zeros(Float64, length(sp2.states))
-    pos(sp, lin) = findfirst(==(lin), sp.lins)
-    put!(x, m, v) = begin
-        key = (x, m)
-        k = get(sp2.index, key, 0)
-        k > 0 && v > 0 && (w2[k] += v)
-    end
-    ## translate a mask on sp.lins (minus `drop`) to a mask on sp2.lins
-    remap(m, drop) = begin
-        m2 = zero(UInt64)
-        for (k, lin) ∈ enumerate(sp.lins)
-            if lin ≠ drop && inI(m,k)
-                m2 = setI(m2, pos(sp2,lin))
-            end
-        end
-        m2
+    w2 = zeros(length(sp2.states))
+    deposit!(x, m, v) = begin
+        k = get(sp2.index, (x, m), 0)   # zero if the state is infeasible
+        k > 0 && (w2[k] += v)
     end
     for (j, ((S,E,I,R), m)) ∈ enumerate(sp.states)
         v = w[j]
         v > 0 || continue
-        if type == Root
+        if type == Root                 # the new lineage is in either deme
             c = chillins[1]
-            m2 = remap(m, zero(Name))
-            put!((S,E,I,R), m2, v)                     # lineage c in E (bit unset)
-            put!((S,E,I,R), setI(m2, pos(sp2,c)), v)   # lineage c in I
-        else
-            kp = pos(sp, parlin)
-            inI(m, kp) || continue                     # parent must be infectious
-            m2 = remap(m, parlin)
+            deposit!((S,E,I,R), m, v)
+            deposit!((S,E,I,R), m | bit(c), v)
+        elseif isinfec(m,parlin)        # otherwise, the parent must be infectious
+            m0 = m & ~bit(parlin)
             if type == Sample && isempty(chillins)
-                lI2 = count_ones(m2)
-                put!((S,E,I,R), m2, v*ψ*(I-lI2))
-                χ > 0 && put!((S,E,I-1,R), m2, v*χ*I)
+                deposit!((S,E,I,R), m0, v*ψ*(I-count_ones(m0)))
+                deposit!((S,E,I-1,R), m0, v*χ*I)
             elseif type == Sample
-                put!((S,E,I,R), setI(m2, pos(sp2,chillins[1])), v*ψ)
-            elseif type == Node
-                S ≥ 1 || continue
-                wt = v*β*S/(pop*(E+1))
+                deposit!((S,E,I,R), m0 | bit(chillins[1]), v*ψ)
+            elseif type == Node && S > 0
                 c1, c2 = chillins
-                put!((S-1,E+1,I,R), setI(m2, pos(sp2,c1)), wt)
-                put!((S-1,E+1,I,R), setI(m2, pos(sp2,c2)), wt)
+                wt = v*β*S/(pop*(E+1))
+                deposit!((S-1,E+1,I,R), m0 | bit(c1), wt)
+                deposit!((S-1,E+1,I,R), m0 | bit(c2), wt)
             end
         end
     end
     w2
+end
+
+## the state space and generator for the lineages `lins`, memoized in `cache`
+space!(cache, lins, totals, p) = get!(cache, lins) do
+    sp = Space(lins, totals)
+    sp, Generator(sp, p)
 end
 
 """
@@ -202,63 +211,54 @@ end
            pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08)
 
 Exact log likelihood of the [`Genealogy`](@ref) `g` under the SEIRS
-model.  Parameters and initial-state conventions are identical to
-those of the `filter_pomp` constructors of the SEIR filter modules.
+model.  The parameters have the same meanings and defaults as in the
+`filter_pomp` constructors of the other SEIR modules.
 """
 loglik(
     g::Genealogy;
     β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02, χ = 0.0,
     pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08,
 ) = begin
-    p = map(Float64, (; β, σ, γ, ω, ψ, χ, pop))
-    x0 = Tuple(POMP.barycentric(Int64, (S0, E0, I0, R0), pop))::PopState
-    N0 = sum(x0)
-    totals = χ > 0 ? (0:N0) : (N0:N0)
-    sp = Space(Name[], totals)
-    w = zeros(Float64, length(sp.states))
-    w[sp.index[(x0, zero(UInt64))]] = 1.0
+    @assert g.nsample ≤ 64 "too many samples for the exact computation"
+    p = map(Float64, (;β,σ,γ,ω,ψ,χ,pop))
+    x0 = Tuple(barycentric(Int64,(S0,E0,I0,R0),pop))
+    totals = χ > 0 ? (0:sum(x0)) : (sum(x0):sum(x0))
     cache = Dict{Vector{Name},Tuple{Space,Generator}}()
-    getspace(lins) = get!(cache, lins) do
-        s = Space(lins, totals)
-        (s, Generator(s, p))
-    end
-    ll = 0.0
-    t = PhyloPOMP.timezero(g)
     lins = Name[]
+    sp, Q = space!(cache, lins, totals, p)
+    w = zeros(length(sp.states))
+    w[sp.index[(x0, zero(UInt64))]] = 1
+    ll = 0.0
+    t = timezero(g)
     for n ∈ eachindex(g)
-        node = g[n]
-        sp, G = getspace(lins)
-        ll += propagate!(w, G, node.slate - t)
-        t = node.slate
-        parlin = node.lineage
-        chillins = Name[g[c].lineage for c ∈ node.children]
-        lins2 = sort!(union(setdiff(lins, [parlin]), chillins))
-        sp2, _ = getspace(lins2)
-        w = singular(w, sp, sp2, node.type, parlin, chillins, p)
+        ll += propagate!(w, Q, g[n].slate-t)
+        t = g[n].slate
+        parlin = g[n].lineage
+        chillins = Name[g[c].lineage for c ∈ g[n].children]
+        lins = sort!(union(setdiff(lins,[parlin]), chillins))
+        sp2, Q = space!(cache, lins, totals, p)
+        w = singular(w, sp, sp2, g[n].type, parlin, chillins, p)
+        sp = sp2
         s = sum(w)
         s > 0 || return -Inf
         w ./= s
         ll += log(s)
-        lins = lins2
     end
-    _, G = getspace(lins)
-    ll += propagate!(w, G, g.time - t)
-    ll
+    ll + propagate!(w, Q, g.time-t)
 end
 
 """
     events(g)
 
-Flatten a [`Genealogy`](@ref) into a vector of named tuples
-`(t, type, parent, children)` (useful for exporting test cases).
+The genealogical events of `g` as a vector of named tuples
+`(t, type, parent, children)`, e.g., for exporting test cases.
 """
 events(g::Genealogy) = map(eachindex(g)) do n
-    node = g[n]
     (
-        t = node.slate,
-        type = lowercase(String(Symbol(node.type))),
-        parent = Int(node.lineage),
-        children = Int[g[c].lineage for c ∈ node.children],
+        t = g[n].slate,
+        type = lowercase(String(Symbol(g[n].type))),
+        parent = Int(g[n].lineage),
+        children = Int[g[c].lineage for c ∈ g[n].children],
     )
 end
 
