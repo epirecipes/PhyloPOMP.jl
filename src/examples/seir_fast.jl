@@ -384,7 +384,7 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
     ess = diagnostics ? fill(NaN, M) : Float64[]
     zf = diagnostics ? fill(NaN, M) : Float64[]
     cll = diagnostics ? fill(NaN, M) : Float64[]
-    nev = zeros(Int, opt.nchunks)
+    nev = zeros(Int, max(opt.nchunks, 1))
     W = fill(1.0/Np, Np)          # normalized weights carried between steps
     ancestors = Vector{Int}(undef, Np)
     loglik = 0.0
@@ -397,7 +397,7 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
     if post
         j = 1
         while j ≤ M && (j == 1 || tr.time[j] == tr.t0)
-            run_chunks!(P, Np, opt, seed, -j, nev) do i, r
+            run_chunks!(P, Np, opt, seed, -j) do i, r, c
                 singular!(tr, P, i, j, p, opt, r)
             end
             j += 1
@@ -406,12 +406,12 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
     end
     for k ∈ k0:M
         ## propagate: (pre: event k) + regular part over interval k + (post: event k+1)
-        run_chunks!(P, Np, opt, seed, k, nev) do i, r
+        run_chunks!(P, Np, opt, seed, k) do i, r, c
             if !post
                 singular!(tr, P, i, k, p, opt, r)
             end
             if isfinite(P.logw[i])
-                regular!(tr, P, i, k, tr.time[k], tr.tend[k], p, opt, r)
+                nev[c] += regular!(tr, P, i, k, tr.time[k], tr.tend[k], p, opt, r)
             end
             if post && k < M && isfinite(P.logw[i])
                 singular!(tr, P, i, k+1, p, opt, r)
@@ -451,20 +451,20 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
 end
 
 ## run f(i, rng) for all particles, in parallel chunks with reproducible RNGs
-run_chunks!(f, P::Particles, Np::Int, opt::Options, seed::UInt64, k::Int, nev) = begin
+run_chunks!(f, P::Particles, Np::Int, opt::Options, seed::UInt64, k::Int) = begin
     nc = min(opt.nchunks, Np)
     if opt.threaded && nthreads() > 1
         @threads :static for c ∈ 1:nc
             rng = Xoshiro(hash((seed, k, c)))
             for i ∈ c:nc:Np
-                f(i, rng)
+                f(i, rng, c)
             end
         end
     else
         for c ∈ 1:nc
             rng = Xoshiro(hash((seed, k, c)))
             for i ∈ c:nc:Np
-                f(i, rng)
+                f(i, rng, c)
             end
         end
     end
