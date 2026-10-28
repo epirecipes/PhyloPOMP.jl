@@ -174,7 +174,7 @@ regular_part!(
         step::Time = zero(Time)
         decay::Prob = zero(Prob)
         ellc, ellh = ell(cols)
-        while t+step < tf
+        while t < tf
             decay = event_rates!(
                 alpha, pi, cols,
                 Sc, Ic, Sh, Ih;
@@ -182,7 +182,7 @@ regular_part!(
             )
             k, s = rcateg(alpha .* pi)
             step = -log(rand())/s
-            if t+step < tf
+            if k > 0 && t+step < tf
                 ll -= decay*step+log(pi[k])
                 if k == 1
                     Sc -= 1

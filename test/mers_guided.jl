@@ -45,7 +45,7 @@ heavy = occursin(r"y|yes|t|true", get(ENV,"RUN_HEAVY_TESTS","no"))
         @time mf1 = mif(mf,Nmif=50,cooling=geometric_cooling(0.8))
         @time mf2 = mif(mf1,Nmif=100,cooling=geometric_cooling(0.1))
         @info "estimates: $(map(x->round(x,sigdigits=3),coef(mf2)))"
-        @info "logLik estimate = $(logLik(mf2))"
+        @info "logLik estimate = $(round(logLik(mf2),digits=2))"
     end
 
 end

@@ -68,14 +68,14 @@ end
 
 demography!(
     alpha, (;Sc, Ic, Sh, Ih), cols;
-    Bc, Bh, Nc, Nh, _...
-        ) = begin
-            alpha[1] = Bc
-            alpha[2] = Bh
-            alpha[3] = Bc*Sc/Nc
-            alpha[4] = Bh*Sh/Nh
-            zero(Prob)
-        end
+    Bc, Bh, Nc, Nh, _...,
+) = begin
+    alpha[1] = Bc
+    alpha[2] = Bh
+    alpha[3] = Bc*Sc/Nc
+    alpha[4] = Bh*Sh/Nh
+    zero(Prob)
+end
 
 sampling(
     (;Sc, Ic, Sh, Ih), cols;
@@ -255,18 +255,22 @@ regular_transmission_cc!(
     t, guide, node, cols, (;Sc, Ic, Sh, Ih),
     kwargs...,
 ) = begin
+    ellC = ell(cols,Camel)
     Sc -= 1
     Ic += 1
-    zero(Prob), (;Sc, Ic, Sh, Ih)
+    ll = log(1-ellC*(ellC-1)/Ic/(Ic-1))
+    ll, (;Sc, Ic, Sh, Ih)
 end
 
 regular_transmission_hh!(
     t, guide, node, cols, (;Sc, Ic, Sh, Ih),
     kwargs...,
 ) = begin
+    ellH = ell(cols,Human)
     Sh -= 1
     Ih += 1
-    zero(Prob), (;Sc, Ic, Sh, Ih)
+    ll = log(1-ellH*(ellH-1)/Ih/(Ih-1))
+    ll, (;Sc, Ic, Sh, Ih)
 end
 
 regular_transmission_hc!(
