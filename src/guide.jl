@@ -250,7 +250,7 @@ choose_branch(
 ) where {F,N,D} = begin
     lins = [guide[node].linmap[k] for k ∈ cols[i]]
     p = relhaz(t,guide,node,i,j,lins)
-    s1 = F(n-ell(cols,i))
+    s1 = F(1+n-ell(cols,i))
     s2 = sum(p)
     s = s1+s2
     r = s*rand(F)
