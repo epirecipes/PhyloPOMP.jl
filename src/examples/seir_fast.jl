@@ -177,6 +177,11 @@ Base.@kwdef struct Options
     lookahead::Symbol = :none
     horizon::Int = 1
     temper::Float64 = 1.0
+    ## optional replacement for the regular-part kernel:
+    ## `regular(tr, P, i, k, t, tf, p, opt, rng)` must advance particle `i` over
+    ## `[t, tf)` exactly (adding its log weight to `P.logw[i]`) and return the
+    ## number of population events
+    regular::Union{Nothing,Function} = nothing
 end
 
 ## ----------------------------------------------------------------------
@@ -508,7 +513,9 @@ pfilter(tr::Tree, p::NamedTuple; Np::Int, opt::Options = Options(),
                 singular!(tr, P, i, k, p, opt, r)
             end
             if isfinite(P.logw[i])
-                nev[c] += regular!(tr, P, i, k, tr.time[k], tr.tend[k], p, opt, r)
+                nev[c] += isnothing(opt.regular) ?
+                    regular!(tr, P, i, k, tr.time[k], tr.tend[k], p, opt, r) :
+                    opt.regular(tr, P, i, k, tr.time[k], tr.tend[k], p, opt, r)
             end
             if post && k < M && isfinite(P.logw[i])
                 singular!(tr, P, i, k+1, p, opt, r)

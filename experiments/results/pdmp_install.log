@@ -1,0 +1,84 @@
+   Resolving package versions...
+   Installed OpenBLAS32_jll ──────────────────────── v0.3.34+1
+   Installed PoissonRandom ───────────────────────── v0.4.14
+   Installed SuiteSparse32_jll ───────────────────── v7.12.1+1
+   Installed LSODA_jll ───────────────────────────── v0.1.2+0
+   Installed DiffEqCallbacks ─────────────────────── v4.19.5
+   Installed LSODA ───────────────────────────────── v1.2.0
+   Installed Sundials ────────────────────────────── v6.7.2
+   Installed PiecewiseDeterministicMarkovProcesses ─ v0.0.12
+  Installing 3 artifacts
+   Installed artifact OpenBLAS32    3.1 MiB
+   Installed artifact LSODA         21.5 KiB
+   Installed artifact SuiteSparse32 1.3 MiB
+    Updating `~/Projects/phylopomp/PhyloPOMP.jl/experiments/Project.toml`
+  [1dea7af3] + OrdinaryDiffEq v7.8.1
+  [86206cdf] + PiecewiseDeterministicMarkovProcesses v0.0.12
+    Updating `~/Projects/phylopomp/PhyloPOMP.jl/experiments/Manifest.toml`
+  [ec485272] + ArnoldiMethod v0.4.0
+⌅ [fa961155] + CEnum v0.5.0
+  [459566f4] + DiffEqCallbacks v4.19.5
+  [86223c79] + Graphs v1.15.0
+  [d25df0c9] + Inflate v0.1.5
+⌅ [ccbc3e58] + JumpProcesses v9.33.1
+  [7f56f5a3] + LSODA v1.2.0
+⌅ [bac558e1] ↓ OrderedCollections v2.0.3 ⇒ v1.8.2
+⌅ [d96e819e] + Parameters v0.12.3
+  [86206cdf] + PiecewiseDeterministicMarkovProcesses v0.0.12
+  [e409e4f3] + PoissonRandom v0.4.14
+  [699a6c99] + SimpleTraits v0.9.6
+  [90137ffa] + StaticArrays v1.9.24
+  [c3572dad] + Sundials v6.7.2
+  [3a884ed6] + UnPack v1.0.2
+  [aae0fff6] + LSODA_jll v0.1.2+0
+  [656ef2d0] + OpenBLAS32_jll v0.3.34+1
+  [ca45d3f4] + SuiteSparse32_jll v7.12.1+1
+  [fb77eaff] + Sundials_jll v7.5.0+0
+  [8dfed614] + Test v1.11.0
+        Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`
+Precompiling packages...
+   1.1 s  ✓ UnPack
+   1.1 s  ✓ InverseFunctions → InverseFunctionsTestExt
+   1.1 s  ✓ Accessors → TestExt
+   1.0 s  ✓ LSODA_jll
+   1.1 s  ✓ PoissonRandom
+   1.1 s  ✓ OpenBLAS32_jll
+   1.1 s  ✓ SuiteSparse32_jll
+   0.9 s  ✓ RecursiveArrayTools → RecursiveArrayToolsTablesExt
+   4.8 s  ✓ StaticArrays
+  12.5 s  ✓ PrettyTables
+  89.9 s  ✓ FiniteDiff → FiniteDiffStaticArraysExt
+  90.0 s  ✓ StaticArrays → StaticArraysStatisticsExt
+  82.3 s  ✓ ForwardDiff → ForwardDiffStaticArraysExt
+  90.0 s  ✓ Adapt → AdaptStaticArraysExt
+  94.1 s  ✓ Parameters
+  90.1 s  ✓ ConstructionBase → ConstructionBaseStaticArraysExt
+  90.0 s  ✓ DifferentiationInterface → DifferentiationInterfaceStaticArraysExt
+  90.0 s  ✓ SciMLBase → SciMLBaseStaticArraysExt
+  90.2 s  ✓ ArnoldiMethod
+  90.2 s  ✓ Accessors → StaticArraysExt
+ 157.1 s  ✓ SymbolicIndexingInterface → SymbolicIndexingInterfacePrettyTablesExt
+ 157.1 s  ✓ LinearSolve → LinearSolveArnoldiMethodExt
+ 159.3 s  ✓ TimerOutputs
+   2.6 s  ✓ DiffEqCallbacks
+ 305.2 s  ✓ Graphs
+ 379.2 s  ✓ LSODA
+1131.4 s  ✓ Sundials_jll
+ 733.5 s  ✓ JumpProcesses
+  62.0 s  ✓ JumpProcesses → JumpProcessesForwardDiffExt
+  62.0 s  ✓ JumpProcesses → JumpProcessesOrdinaryDiffEqCoreExt
+  69.1 s  ✓ Sundials
+  78.2 s  ✓ NonlinearSolve → NonlinearSolveSundialsExt
+ 234.1 s  ✓ PiecewiseDeterministicMarkovProcesses
+  33 dependencies successfully precompiled in 1437 seconds. 191 already precompiled.
+Precompiling packages...
+    PhyloPOMP Being precompiled by another process (pid: 65496, pidfile: /Users/sdwfrost/.julia/compiled/v1.13/PhyloPOMP/5fPdB_uoaNF.ji.pidfile)
+   0.6 s  ✓ FillArrays → FillArraysStaticArraysExt
+   1.2 s  ✓ Distributions → DistributionsTestExt
+ 142.9 s  ✓ PhyloPOMP
+  2 dependencies successfully precompiled in 145 seconds. 255 already precompiled.
+PDMP 0.0.12
+
+real	26m33.063s
+user	1m10.874s
+sys	0m9.146s

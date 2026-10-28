@@ -63,5 +63,5 @@ for c ∈ cases
                      sd=s.sd, z=z, nfinite=s.nfinite, R=R, Np=NP, seconds=t))
     end
 end
-write_csv(joinpath(RESULTS, "e03_validate_filters.csv"), rows)
-println("\nwrote ", joinpath(RESULTS, "e03_validate_filters.csv"))
+write_csv(joinpath(RESULTS, get(ENV, "E03_OUT", "e03_validate_filters.csv")), rows)
+println("\nwrote ", get(ENV, "E03_OUT", "e03_validate_filters.csv"))
