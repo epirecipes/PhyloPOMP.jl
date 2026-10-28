@@ -1,135 +1,145 @@
 """
     SimSEIR
 
-Forward simulation of the SEIRS model with non-destructive (`ψ`) and
-destructive (`χ`) sampling, tracking the transmission genealogy of every
-infection.  [`simulate`](@ref PhyloPOMP.SimSEIR.simulate) returns the
-pruned, obscured genealogy of the samples as a PhyloPOMP
-[`Genealogy`](@ref), with the same parameter conventions as the
-`filter_pomp` constructors of the SEIR filter modules.
+Simulation of genealogies under the SEIRS model.  The population process
+is simulated individual by individual, with non-destructive (rate `ψ`)
+and destructive (rate `χ`) sampling of infectious individuals, while the
+transmission genealogy of all infections is recorded.  The genealogy of
+the samples is then extracted (pruned and obscured), so that the result
+can be passed to the filters of the other SEIR modules.
 """
 module SimSEIR
 
-using Random: AbstractRNG, default_rng
+using Random: AbstractRNG, default_rng, randexp
 using ..PhyloPOMP
-using ..PhyloPOMP: Root, Node, Sample, Name, Time, GenealNode, Genealogy
-import PartiallyObservedMarkovProcesses as POMP
+using ..PhyloPOMP: Root, Node, Sample, Name, Time, GenealNode
 
-const ROOT = 0x00
-const BRANCH = 0x01
-const SAMPLE = 0x02
-const END = 0x03
-
-## remove the i-th entry of v in O(1) (order not preserved)
-swappop!(v, i) = begin
-    x = v[i]
-    v[i] = v[end]
-    pop!(v)
-    x
-end
+## kinds of node in the complete transmission genealogy
+const FOUNDER = 0x00        # an individual infected at the initial time
+const TRANSMISSION = 0x01   # the infector's lineage splits
+const SAMPLING = 0x02       # a sample is taken
+const RECOVERY = 0x03       # the lineage ends unsampled
 
 """
     simulate(; β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02, χ = 0.0,
              pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08,
-             t0 = 0.0, time, rng = default_rng(), maxevents = 10^8)
+             t0 = 0.0, time, rng = default_rng())
 
-Simulate the SEIRS genealogy process on `[t0, time]`.  Returns a named
-tuple `(genealogy, nsample, state, nevents)` where `genealogy` is a
-`Genealogy{PhyloPOMP.Unstructured}`, `nsample` the number of samples,
-`state` the final `(S,E,I,R)` and `nevents` the number of population events.
+Simulate the SEIRS model on the interval `[t0, time]`.  The parameters
+have the same meanings and defaults as in the `filter_pomp` constructors
+of the SEIR filter modules.  Returns a named tuple with the
+[`Genealogy`](@ref) of the samples (`genealogy`), the number of samples
+(`nsample`), the final state (`state`), and the number of population
+events (`nevents`).
 """
 simulate(;
     β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02, χ = 0.0,
     pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08,
     t0 = 0.0, time::Real, rng::AbstractRNG = default_rng(),
-    maxevents::Integer = 10^8,
 ) = begin
-    S, E, I, R = POMP.barycentric(Int64, (S0, E0, I0, R0), pop)
-    ## genealogy of all infections: node arrays
-    nt = Float64[]; nkind = UInt8[]; npar = Int[]
-    newnode!(t, kind, par) = (push!(nt, t); push!(nkind, kind); push!(npar, par); length(nt))
-    cur = Int[]                     # current lineage node of each infected individual
-    Eids = Int[]; Iids = Int[]      # individuals in E and in I
+    S, E, I, R = barycentric(Int64,(S0,E0,I0,R0),pop)
+    ## the complete genealogy: time, kind, and parent of each node
+    nodetime = Time[]; kind = UInt8[]; parent = Int[]
+    newnode!(t, k, par) = begin
+        push!(nodetime,t); push!(kind,k); push!(parent,par)
+        length(kind)
+    end
+    ## the current node on the lineage of each infected individual,
+    ## and the individuals in each infected compartment
+    lineage = Int[]; exposed = Int[]; infectious = Int[]
     for _ ∈ 1:E
-        push!(cur, newnode!(t0, ROOT, 0)); push!(Eids, length(cur))
+        push!(lineage, newnode!(t0,FOUNDER,0))
+        push!(exposed, length(lineage))
     end
     for _ ∈ 1:I
-        push!(cur, newnode!(t0, ROOT, 0)); push!(Iids, length(cur))
+        push!(lineage, newnode!(t0,FOUNDER,0))
+        push!(infectious, length(lineage))
     end
-    t = Float64(t0)
-    nev = 0
+    t = Time(t0)
+    nevents = 0
     nsample = 0
-    while nev < maxevents
-        r1 = β*S*I/pop; r2 = σ*E; r3 = γ*I; r4 = ω*R; r5 = ψ*I; r6 = χ*I
-        tot = r1+r2+r3+r4+r5+r6
-        tot > 0 || break
-        t += randexp(rng)/tot
+    while true
+        rates = (β*S*I/pop, σ*E, γ*I, ω*R, ψ*I, χ*I)
+        total = sum(rates)
+        total > 0 || break
+        t += randexp(rng)/total
         t < time || break
-        u = rand(rng)*tot
-        nev += 1
-        if (u -= r1) < 0                 # transmission
-            i = Iids[rand(rng, 1:length(Iids))]
-            b = newnode!(t, BRANCH, cur[i])
-            cur[i] = b
-            push!(cur, b); push!(Eids, length(cur))
+        nevents += 1
+        u = rand(rng)*total
+        if (u -= rates[1]) < 0          # transmission
+            j = rand(rng, infectious)
+            lineage[j] = newnode!(t,TRANSMISSION,lineage[j])
+            push!(lineage, lineage[j])
+            push!(exposed, length(lineage))
             S -= 1; E += 1
-        elseif (u -= r2) < 0             # progression
-            push!(Iids, swappop!(Eids, rand(rng, 1:length(Eids))))
+        elseif (u -= rates[2]) < 0      # progression
+            push!(infectious, takerandom!(rng,exposed))
             E -= 1; I += 1
-        elseif (u -= r3) < 0             # recovery
-            i = swappop!(Iids, rand(rng, 1:length(Iids)))
-            newnode!(t, END, cur[i])
+        elseif (u -= rates[3]) < 0      # recovery
+            j = takerandom!(rng,infectious)
+            newnode!(t,RECOVERY,lineage[j])
             I -= 1; R += 1
-        elseif (u -= r4) < 0             # waning
+        elseif (u -= rates[4]) < 0      # waning
             R -= 1; S += 1
-        elseif (u -= r5) < 0             # non-destructive sample
-            i = Iids[rand(rng, 1:length(Iids))]
-            cur[i] = newnode!(t, SAMPLE, cur[i])
+        elseif (u -= rates[5]) < 0      # non-destructive sample
+            j = rand(rng, infectious)
+            lineage[j] = newnode!(t,SAMPLING,lineage[j])
             nsample += 1
-        else                             # destructive sample
-            i = swappop!(Iids, rand(rng, 1:length(Iids)))
-            newnode!(t, SAMPLE, cur[i])
+        else                            # destructive sample
+            j = takerandom!(rng,infectious)
+            newnode!(t,SAMPLING,lineage[j])
             I -= 1
             nsample += 1
         end
     end
     (
-        genealogy = prune(nt, nkind, npar, t0, time),
+        genealogy = prune(nodetime, kind, parent, t0, time),
         nsample = nsample,
-        state = (; S, E, I, R),
-        nevents = nev,
+        state = (;S, E, I, R),
+        nevents = nevents,
     )
 end
 
-randexp(rng) = -log(rand(rng))
+## remove and return a random element of `v` (order is not preserved)
+takerandom!(rng, v) = begin
+    k = rand(rng, eachindex(v))
+    x = v[k]
+    v[k] = v[end]
+    pop!(v)
+    x
+end
 
-## prune the full genealogy to the ancestry of the samples
-prune(nt, nkind, npar, t0, time) = begin
-    n = length(nt)
-    marked = falses(n)
-    nkept = zeros(Int, n)
-    for k ∈ n:-1:1
-        nkind[k] == SAMPLE && (marked[k] = true)
-        if marked[k] && npar[k] > 0
-            marked[npar[k]] = true
-            nkept[npar[k]] += 1
+## Prune the complete genealogy to the ancestry of the samples and convert
+## it to a Genealogy: founders and transmissions without sampled
+## descendants disappear, and a transmission with sampled descendants along
+## only one of its two lineages is not visible.
+prune(nodetime, kind, parent, t0, time) = begin
+    n = length(kind)
+    sampled = falses(n)         # is the node, or one of its descendants, a sample?
+    nsampled = zeros(Int,n)     # number of children with sampled descendants
+    for k ∈ Iterators.reverse(1:n)
+        if kind[k] == SAMPLING
+            sampled[k] = true
+        end
+        if sampled[k] && parent[k] > 0
+            sampled[parent[k]] = true
+            nsampled[parent[k]] += 1
         end
     end
-    retained(k) = marked[k] && (nkind[k] != BRANCH || nkept[k] == 2)
-    up = zeros(Int, n)              # nearest retained ancestor-or-self
-    gname = zeros(Int, n)
+    visible(k) = sampled[k] && (kind[k] ≠ TRANSMISSION || nsampled[k] == 2)
     D = PhyloPOMP.Unstructured
-    G = Genealogy{D}(t0, time)
+    G = Genealogy{D}(t0,time)
+    name = zeros(Int,n)         # name of the nearest visible ancestor (or self)
     for k ∈ 1:n
-        marked[k] || continue
-        up[k] = retained(k) ? k : up[npar[k]]
-        if retained(k)
-            type = nkind[k] == ROOT ? Root : nkind[k] == SAMPLE ? Sample : Node
-            par = npar[k] > 0 ? Name(gname[up[npar[k]]]) : nothing
-            node = GenealNode{D.DemeSet}(length(G.nodes)+1, nt[k], missing, type, par)
-            push!(G.nodes, node)
-            gname[k] = length(G.nodes)
-            isnothing(par) || push!(G.nodes[par].children, Name(gname[k]))
+        sampled[k] || continue
+        if visible(k)
+            type = kind[k] == FOUNDER ? Root : kind[k] == SAMPLING ? Sample : Node
+            par = parent[k] > 0 ? Name(name[parent[k]]) : nothing
+            push!(G.nodes, GenealNode{D.DemeSet}(length(G.nodes)+1,nodetime[k],missing,type,par))
+            isnothing(par) || push!(G.nodes[par].children, Name(length(G.nodes)))
+            name[k] = length(G.nodes)
+        else
+            name[k] = name[parent[k]]
         end
     end
     PhyloPOMP.repair!(G)
