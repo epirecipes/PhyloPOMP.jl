@@ -5,6 +5,12 @@ likelihood. Everything targets Julia 1.13. The new package modules live in
 `src/examples/`: `ExactSEIR` (exact likelihood for small problems), `SimSEIR`
 (genealogy simulator) and `FastSEIR` (fast streaming filter).
 
+This branch is the research snapshot used to produce the results below. Reviewed,
+simplified versions of the modules are on the `feature/exact-likelihood`,
+`feature/genealogy-simulator` and `feature/fast-filter` branches. There, `FastSEIR` keeps
+only the validated options and is run with `pfilter(FastSEIR.Tree(g, m); Np, params...)`.
+The look-ahead and kernel-hook options used by E06/E07 and E11 exist only here.
+
 ## Setup
 
 ```sh
