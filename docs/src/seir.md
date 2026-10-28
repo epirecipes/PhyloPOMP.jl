@@ -92,3 +92,26 @@ p = HardSEIR.filter_pomp(g,fsmarkov(Expos=>0.1,Infec=>1,(Expos,Infec)=>1))
 pf = pfilter(p, Np = 1000)
 round(logLik(pf),digits=1)
 ```
+
+## Simulating genealogies
+
+```@autodocs
+Modules = [PhyloPOMP.SimSEIR]
+Order   = [:module, :function, :macro, :type, :constant]
+```
+
+An example simulating a genealogy and computing its likelihood with the guided filter.
+
+```@example
+using Random: Xoshiro
+using PhyloPOMP
+using PhyloPOMP.SimSEIR
+using PhyloPOMP.GuidedSEIR
+using PhyloPOMP.GuidedSEIR.Demes: Expos, Infec
+
+sim = SimSEIR.simulate(; β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02,
+                       pop = 100, time = 50.0, rng = Xoshiro(1))
+g = sim.genealogy
+p = GuidedSEIR.filter_pomp(g, fsmarkov(Expos=>0.1, Infec=>1, (Expos,Infec)=>1))
+(nsample = sim.nsample, logLik = round(logLik(pfilter(p, Np = 1000)), digits = 1))
+```
