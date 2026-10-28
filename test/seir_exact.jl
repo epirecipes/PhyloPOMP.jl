@@ -47,11 +47,11 @@ import PartiallyObservedMarkovProcesses as POMP
         abs(e.est - exact) < 5e.se + 0.02
     end
     @test agrees(GuidedSEIR.filter_pomp(g, m(GuidedSEIR); par...))
-    ## kingaa/PhyloPOMP.jl#8: the transmission proposal of these filters never
-    ## proposes "no color change" when I == ellI, so they are biased downward.
-    @test_broken agrees(NaiveSEIR.filter_pomp(g; par...))
-    @test_broken agrees(SoftSEIR.filter_pomp(g, m(SoftSEIR); par...))
-    @test_broken agrees(HardSEIR.filter_pomp(g, m(HardSEIR); par...))
+    ## kingaa/PhyloPOMP.jl#8: these filters were biased downward before the
+    ## fix of the transmission proposal (see test/seir_support.jl).
+    @test agrees(NaiveSEIR.filter_pomp(g; par...))
+    @test agrees(SoftSEIR.filter_pomp(g, m(SoftSEIR); par...))
+    @test agrees(HardSEIR.filter_pomp(g, m(HardSEIR); par...))
 
 end
 
