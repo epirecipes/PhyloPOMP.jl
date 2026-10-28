@@ -109,4 +109,25 @@ using PhyloPOMP.ExactSEIR
 g = parse_newick("(([&&PhyloPOMP type=sample]:0.6,[&&PhyloPOMP type=sample]:1.1)[&&PhyloPOMP type=node]:0.4);", time = 2.0)
 ExactSEIR.loglik(g; β = 2.0, σ = 1.5, γ = 0.7, ω = 0.3, ψ = 0.5, χ = 0.0,
                  pop = 4, S0 = 0.5, E0 = 0.25, I0 = 0.25, R0 = 0.0)
+## Simulating genealogies
+
+```@autodocs
+Modules = [PhyloPOMP.SimSEIR]
+Order   = [:module, :function, :macro, :type, :constant]
+```
+
+An example simulating a genealogy and computing its likelihood with the guided filter.
+
+```@example
+using Random: Xoshiro
+using PhyloPOMP
+using PhyloPOMP.SimSEIR
+using PhyloPOMP.GuidedSEIR
+using PhyloPOMP.GuidedSEIR.Demes: Expos, Infec
+
+sim = SimSEIR.simulate(; β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02,
+                       pop = 100, time = 50.0, rng = Xoshiro(1))
+g = sim.genealogy
+p = GuidedSEIR.filter_pomp(g, fsmarkov(Expos=>0.1, Infec=>1, (Expos,Infec)=>1))
+(nsample = sim.nsample, logLik = round(logLik(pfilter(p, Np = 1000)), digits = 1))
 ```
