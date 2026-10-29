@@ -15,6 +15,9 @@ using PhyloPOMP: Root, Node, Sample
 using PhyloPOMP.FastSEIR: Tree, Particles, FastPfilterd, regular_part!, singular_part!,
     copyparticle!, systematic!, foreach_particle, isinfec, guideprob
 
+## these filters do not estimate the sufficient statistics
+const NOSTATS = PhyloPOMP.FastSEIR.SuffStats(ntuple(_->NaN,length(PhyloPOMP.FastSEIR.STATS)))
+
 ## log look-ahead for particle i, which is at the start of interval k (k < M)
 lookahead(tr::Tree, P::Particles, i, k, p, guided::Bool) = begin
     (; β, γ, ψ, χ, pop) = p
@@ -79,7 +82,7 @@ pfilter_apf(
             n
         end
         llmax = maximum(P.ll)
-        isfinite(llmax) || return FastPfilterd(-Inf,ess,cll,zerofrac,nevents)
+        isfinite(llmax) || return FastPfilterd(-Inf,ess,cll,zerofrac,nevents,NOSTATS)
         W .*= exp.(P.ll .- llmax)
         s = sum(W)
         cll[k] = llmax+log(s)
@@ -105,7 +108,7 @@ pfilter_apf(
         P, Q = Q, P
         W .= 1/Np
     end
-    FastPfilterd(loglik,ess,cll,zerofrac,nevents)
+    FastPfilterd(loglik,ess,cll,zerofrac,nevents,NOSTATS)
 end
 
 end

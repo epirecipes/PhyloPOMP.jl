@@ -15,6 +15,9 @@ using PhyloPOMP: Name, Root
 using PhyloPOMP.FastSEIR: Tree, Particles, FastPfilterd, isinfec, infec!, expos!,
     swap_weight, guideprob, singular_part!, copyparticle!, systematic!, foreach_particle
 
+## these filters do not estimate the sufficient statistics
+const NOSTATS = PhyloPOMP.FastSEIR.SuffStats(ntuple(_->NaN,length(PhyloPOMP.FastSEIR.STATS)))
+
 ## total exact color weights accompanying a transmission and a progression
 Φtrans(E, I, ellE, ellI) = I > 0 ? ((E+1-ellE)*I + ellI*(I+1-ellI))/((E+1)*I) : 1.0
 Φprog(E, I, ellE, ellI) = (@indicator(E > ellE, I+1-ellI) + ellE)/(I+1)
@@ -228,7 +231,7 @@ pfilter_w(
             n
         end
         llmax = maximum(P.ll)
-        isfinite(llmax) || return FastPfilterd(-Inf,ess,cll,zerofrac,nevents)
+        isfinite(llmax) || return FastPfilterd(-Inf,ess,cll,zerofrac,nevents,NOSTATS)
         W .*= exp.(P.ll .- llmax)
         s = sum(W)
         cll[k] = llmax+log(s)
@@ -246,7 +249,7 @@ pfilter_w(
             W .= 1/Np
         end
     end
-    FastPfilterd(loglik,ess,cll,zerofrac,nevents)
+    FastPfilterd(loglik,ess,cll,zerofrac,nevents,NOSTATS)
 end
 
 end
