@@ -13,11 +13,23 @@ using Random: AbstractRNG, default_rng, randexp
 using PhyloPOMP
 using PhyloPOMP: Name, Root
 using PhyloPOMP.FastSEIR: Tree, Particles, FastPfilterd, isinfec, infec!, expos!,
-    swap_weight, guideprob, singular_part!, copyparticle!, systematic!, foreach_particle
+    guideprob, singular_part!, copyparticle!, systematic!, foreach_particle
 
 ## total exact color weights accompanying a transmission and a progression
 Φtrans(E, I, ellE, ellI) = I > 0 ? ((E+1-ellE)*I + ellI*(I+1-ellI))/((E+1)*I) : 1.0
 Φprog(E, I, ellE, ellI) = (@indicator(E > ellE, I+1-ellI) + ellE)/(I+1)
+
+## FastSEIR's former per-lineage proposal weight (before O(1) bookkeeping)
+swap_weight(tr::Tree, P::Particles, i, j, toI::Bool, qb, e, guided::Bool) = begin
+    if isinfec(P,i,tr.lins[j]) == toI
+        0.0
+    elseif guided
+        pE, pI = guideprob(tr,j,e)
+        qb*(toI ? pI/pE : pE/pI)
+    else
+        qb
+    end
+end
 
 ## as FastSEIR.color_change, but the log weight is relative to Σφ
 color_change(tr::Tree, P::Particles, i, k, t, toI::Bool, Σφ, rng; guided) = begin

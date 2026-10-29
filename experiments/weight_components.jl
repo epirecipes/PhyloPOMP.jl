@@ -11,8 +11,20 @@ module WeightDiag
 using Random: AbstractRNG, Xoshiro, randexp
 using PhyloPOMP
 using PhyloPOMP: Root, Node, Sample, Name
-using PhyloPOMP.FastSEIR: Tree, Particles, isinfec, infec!, expos!, swap_weight,
+using PhyloPOMP.FastSEIR: Tree, Particles, isinfec, infec!, expos!, guideprob,
     singular_part!, copyparticle!, systematic!, foreach_particle
+
+## FastSEIR's former per-lineage proposal weight (before O(1) bookkeeping)
+swap_weight(tr::Tree, P::Particles, i, j, toI::Bool, qb, e, guided::Bool) = begin
+    if isinfec(P,i,tr.lins[j]) == toI
+        0.0
+    elseif guided
+        pE, pI = guideprob(tr,j,e)
+        qb*(toI ? pI/pE : pE/pI)
+    else
+        qb
+    end
+end
 
 const PHI, IS, DECAY, EVENT = 1, 2, 3, 4
 

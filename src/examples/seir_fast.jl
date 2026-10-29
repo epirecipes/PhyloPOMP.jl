@@ -10,7 +10,9 @@ model.  It estimates the same likelihood as the other SEIR filters, but
   are kept, so memory grows only with the number of particles,
 - a lineage color change accompanying a population event is proposed
   with probability proportional to its exact weight, optionally
-  multiplied by the relative hazard given by a filter guide,
+  multiplied by the relative hazard given by a filter guide, at a cost
+  that does not grow with the number of lineages unless a lineage
+  changes deme,
 - each genealogical event is applied before, rather than after,
   resampling, so that particles incompatible with it are not carried
   forward, and
@@ -86,6 +88,11 @@ struct Tree
     "guide process: probabilities `A[:,1]*c1 + A[:,2]*exp(-κ*(tend-t))*c2`"
     A::Matrix{Float64}
     κ::Float64
+    "guide ratios h(I)/h(E) and h(E)/h(I) of the lineages in `lins`, at the middle of each interval"
+    toI::Vector{Float64}
+    toE::Vector{Float64}
+    "position in `lins` of the parent lineage of event `k+1` on interval `k` (zero if none)"
+    focal::Vector{Int}
 end
 
 Tree(g::Genealogy, m::FSMarkovProc) = Tree(g, guide(g,m,knowledge!))
@@ -112,11 +119,19 @@ Tree(
     end
     ptr[M+1] = length(lins)+1
     nwords = cld(max(Int(g.nsample),1),64)
+    focal = zeros(Int,M)
+    for k ∈ 1:M-1
+        if type[k+1] ≠ Root
+            focal[k] = ptr[k]-1+findfirst(==(parlin[k+1]),@view(lins[ptr[k]:ptr[k+1]-1]))
+        end
+    end
     if isnothing(gd)
         pres = [ones(2,length(chillins[k])) for k ∈ 1:M]
         c1 = zeros(length(lins))
         c2 = zeros(length(lins))
-        Tree(time,tend,type,parlin,chillins,ptr,lins,nwords,false,pres,c1,c2,zeros(2,2),0.0)
+        unit = ones(length(lins))
+        Tree(time,tend,type,parlin,chillins,ptr,lins,nwords,false,pres,c1,c2,zeros(2,2),0.0,
+             unit,unit,focal)
     else
         m = gd.process
         @assert length(m.eigenvals) == 2 "the guide must have two demes"
@@ -124,17 +139,32 @@ Tree(
         c1 = [gd[k].dtarget[1,col(k,j)] for k ∈ 1:M for j ∈ ptr[k]:ptr[k+1]-1]
         c2 = [gd[k].dtarget[2,col(k,j)] for k ∈ 1:M for j ∈ ptr[k]:ptr[k+1]-1]
         pres = [gd[k].present for k ∈ 1:M]
-        Tree(time,tend,type,parlin,chillins,ptr,lins,nwords,true,pres,c1,c2,m.A,-m.eigenvals[2])
+        A, κ = m.A, -m.eigenvals[2]
+        toI = similar(c1)
+        toE = similar(c1)
+        for k ∈ 1:M
+            e = exp(-κ*(tend[k]-time[k])/2)
+            for j ∈ ptr[k]:ptr[k+1]-1
+                pE, pI = guideprob(A,c1[j],c2[j],e)
+                toI[j], toE[j] = ratio(pI,pE), ratio(pE,pI)
+            end
+        end
+        Tree(time,tend,type,parlin,chillins,ptr,lins,nwords,true,pres,c1,c2,A,κ,toI,toE,focal)
     end
 end
 
 ## guide probabilities (E, I) of the lineage at position `j` of `tr.lins`,
 ## where `e = exp(-κ*(tend-t))`
-guideprob(tr::Tree, j::Integer, e::Real) = begin
-    pE = tr.A[1,1]*tr.c1[j] + tr.A[1,2]*e*tr.c2[j]
-    pI = tr.A[2,1]*tr.c1[j] + tr.A[2,2]*e*tr.c2[j]
+guideprob(tr::Tree, j::Integer, e::Real) = guideprob(tr.A,tr.c1[j],tr.c2[j],e)
+
+guideprob(A, c1, c2, e) = begin
+    pE = A[1,1]*c1 + A[1,2]*e*c2
+    pI = A[2,1]*c1 + A[2,2]*e*c2
     max(pE,0.0), max(pI,0.0)
 end
+
+## a ratio of guide probabilities, kept finite and positive
+ratio(p, q) = clamp(p/q,1e-12,1e12)
 
 ## The particles, stored as a structure of arrays.  In the coloring of
 ## particle `i`, bit `b-1` of column `i` of `col` is set if and only if
@@ -169,26 +199,17 @@ copyparticle!(Q::Particles, j, P::Particles, i) = begin
     nothing
 end
 
-## proposal weight of a change of deme of the lineage at position `j` of
-## `tr.lins` (zero if it is already in the destination deme)
-swap_weight(tr::Tree, P::Particles, i, j, toI::Bool, qb, e, guided::Bool) = begin
-    if isinfec(P,i,tr.lins[j]) == toI
-        0.0
-    elseif guided
-        pE, pI = guideprob(tr,j,e)
-        qb*(toI ? pI/pE : pE/pI)
-    else
-        qb
-    end
-end
-
 ## Propose the change of coloring that accompanies a transmission (a
 ## lineage may pass from I to E; `toI = false`) or a progression (a
 ## lineage may pass from E to I; `toI = true`) in particle `i` at time `t`
-## in interval `k`.  Returns the lineage that changes deme (zero for none)
-## and the log importance weight.
+## in interval `k`.  The proposal weight of a change of deme of a lineage
+## is multiplied by its guide ratio: for the parent lineage of the next
+## event, evaluated at time `t`; for the others, the ratio at the middle of
+## the interval, whose sums over the lineages in E and in I are `ΣE` and
+## `ΣI`.  Returns the position in `tr.lins` of the lineage that changes
+## deme (zero for none) and the log importance weight.
 color_change(
-    tr::Tree, P::Particles, i, k, t, toI::Bool, rng;
+    tr::Tree, P::Particles, i, k, t, toI::Bool, ΣE, ΣI, rng;
     proposal, guided,
 ) = begin
     E, I, ellE, ellI = P.E[i], P.I[i], P.ellE[i], P.ellI[i]
@@ -198,27 +219,45 @@ color_change(
         ((E+1-ellE)/(E+1), (I+1-ellI)/((E+1)*I))
     ## proposal weights
     q0, qb = proposal == :local ? (φ0, φb) : (Float64(toI ? E-ellE : I-ellI+1), 1.0)
-    e = guided ? exp(-tr.κ*(tr.tend[k]-t)) : 1.0
-    lins = tr.ptr[k]:(tr.ptr[k+1]-1)
-    total = q0
-    for j ∈ lins
-        total += swap_weight(tr,P,i,j,toI,qb,e,guided)
-    end
-    u = rand(rng)*total
-    if u < q0
-        return zero(Name), log(φ0*total/q0)
-    end
-    u -= q0
-    jb, wb = 0, 0.0
-    for j ∈ lins
-        w = swap_weight(tr,P,i,j,toI,qb,e,guided)
-        if w > 0
-            jb, wb = j, w
-            u < w && break
-            u -= w
+    jf = tr.focal[k]
+    wf = 0.0
+    if jf > 0 && isinfec(P,i,tr.lins[jf]) ≠ toI
+        wf = qb
+        if guided
+            pE, pI = guideprob(tr,jf,exp(-tr.κ*(tr.tend[k]-t)))
+            wf *= toI ? ratio(pI,pE) : ratio(pE,pI)
         end
     end
-    tr.lins[jb], log(φb*total/wb)
+    total = q0 + wf + qb*max(toI ? ΣE : ΣI,0.0)
+    u = rand(rng)*total
+    if u < q0
+        return 0, log(φ0*total/q0)
+    elseif u < q0+wf
+        return jf, log(φb*total/wf)
+    end
+    u -= q0+wf
+    r = toI ? tr.toI : tr.toE
+    jb, wb = 0, 0.0
+    for j ∈ tr.ptr[k]:tr.ptr[k+1]-1
+        if j ≠ jf && isinfec(P,i,tr.lins[j]) ≠ toI
+            jb, wb = j, qb*r[j]
+            u < wb && break
+            u -= wb
+        end
+    end
+    jb, log(φb*total/wb)
+end
+
+## sums of the guide ratios of the lineages (other than the parent of the
+## next event) in E and in I of particle `i` on interval `k`
+ratio_sums(tr::Tree, P::Particles, i, k) = begin
+    ΣE, ΣI = 0.0, 0.0
+    for j ∈ tr.ptr[k]:tr.ptr[k+1]-1
+        if j ≠ tr.focal[k]
+            isinfec(P,i,tr.lins[j]) ? (ΣI += tr.toE[j]) : (ΣE += tr.toI[j])
+        end
+    end
+    ΣE, ΣI
 end
 
 ## Simulate the population process of particle `i` over interval `k`
@@ -233,6 +272,7 @@ regular_part!(
     tf = tr.tend[k]
     ll = P.ll[i]
     nevent = 0
+    ΣE, ΣI = ratio_sums(tr,P,i,k)
     while true
         S, E, I, R, ellI = P.S[i], P.E[i], P.I[i], P.R[i], P.ellI[i]
         transmission = β*S*I/pop
@@ -251,18 +291,24 @@ regular_part!(
         nevent += 1
         u = rand(rng)*rate
         if u < transmission
-            b, lw = color_change(tr,P,i,k,t,false,rng;proposal,guided)
+            j, lw = color_change(tr,P,i,k,t,false,ΣE,ΣI,rng;proposal,guided)
             ll += lw
             P.S[i] -= 1; P.E[i] += 1
-            if b > 0
-                expos!(P,i,b); P.ellI[i] -= 1; P.ellE[i] += 1
+            if j > 0
+                expos!(P,i,tr.lins[j]); P.ellI[i] -= 1; P.ellE[i] += 1
+                if j ≠ tr.focal[k]
+                    ΣI -= tr.toE[j]; ΣE += tr.toI[j]
+                end
             end
         elseif u < transmission+progression
-            b, lw = color_change(tr,P,i,k,t,true,rng;proposal,guided)
+            j, lw = color_change(tr,P,i,k,t,true,ΣE,ΣI,rng;proposal,guided)
             ll += lw
             P.E[i] -= 1; P.I[i] += 1
-            if b > 0
-                infec!(P,i,b); P.ellE[i] -= 1; P.ellI[i] += 1
+            if j > 0
+                infec!(P,i,tr.lins[j]); P.ellE[i] -= 1; P.ellI[i] += 1
+                if j ≠ tr.focal[k]
+                    ΣE -= tr.toI[j]; ΣI += tr.toE[j]
+                end
             end
         elseif u < transmission+progression+recovery
             P.I[i] -= 1; P.R[i] += 1
@@ -369,7 +415,9 @@ the `filter_pomp` constructors of the other SEIR modules.
   probability proportional to its exact weight; with `:uniform`, in
   proportion to the number of individuals involved.
 - `guided`: if `tr` has a guide, multiply the proposal weight of each
-  lineage's change of deme by the guide's relative hazard.
+  lineage's change of deme by the guide's relative hazard: for the
+  parent lineage of the next genealogical event, at the time of the
+  change; for the other lineages, at the middle of the interval.
 - `trigger`: resample whenever the effective sample size falls below
   `trigger*Np` (by default, after every genealogical event).
 - `threaded`: propagate the particles on all available threads.  The
