@@ -17,6 +17,7 @@ package.
 | `weight_components.jl` | `WeightDiag` | per-component decomposition of the particle weights |
 | `weighted_filter.jl` | `WFilter` | weighted-rate and twisted (Doob-style) proposals |
 | `fast_mif.jl` | `FastMif` | iterated filtering (IF2) with per-particle parameters; the prototype of the package's `mif(tr::Tree; ...)` |
+| `population_guide.jl` | `PopulationGuide` | forward population forecast supplying interval-specific colour guidance; unchanged exact FastSEIR target weights |
 
 ## Setup
 
@@ -42,5 +43,34 @@ changed through the environment variables read at the top of each script.
 | `e20_scaling.jl` | How many particles does `seir_trees[2]` need at the defaults? | It is pre-asymptotic below ~64k. At 64k, SD is 3.0 in 81 s (8 threads); SD ≈ 1 needs ≈560k particles. |
 | `e21_tree2_mif.jl`, `e21b_refine.jl` | Do the default parameters fit `seir_trees[2]`? | No. IF2 raises the log-likelihood by ≈2,080 units (β≈2.8, σ≈0.6, γ≈0.48, ω≈5.2, ψ≈0.027, pop≈173). There the plain filter has SD 0.68 at Np = 4000 in 6 s, so the tree-2 degeneracy above was model misfit. |
 | `e23_colour.jl` | Can the colour proposal cost O(1) per population event? | Yes. Freezing non-parent guide ratios mid-interval and keeping running sums is exact and 1.9–2.9× faster on `seir_trees[2]` and a lineage-dense tree, at equal precision. |
+| `e30_population_guide.jl` | Does a forward population forecast improve colour guidance? | Exact target; no demonstrated fixed-precision gain at the tested budgets. Log SD sometimes falls, but rare runs dominate likelihood averages (99% from one run at N=10000). |
 
 A lab notebook with the details, in OKF format, is kept outside the repository.
+
+## E30: population-aware colour guidance
+
+On branch `feature/population-aware-guide`, stacked on
+`perf/colour-bookkeeping`, reproduce the focused checks and measurements with:
+
+```sh
+julia +1.13 -t 4 --project=experiments experiments/test_population_guide.jl
+E30_PARTS=A julia +1.13 -t 4 --project=experiments experiments/e30_population_guide.jl
+E30_PARTS=BC E30_REPS=32 julia +1.13 -t 4 --project=experiments experiments/e30_population_guide.jl
+```
+
+Part A compares default, equilibrium-matched, forecast and step-refined forecast
+guides against exact likelihoods on three tiny genealogies, using 64 replicates
+and 2000 particles. Part B uses the fitted 92- and 864-sample trees, with 1000
+particles; part C uses the seed-27 large-population simulations with 512
+particles. `E30_EXACT_REPS`, `E30_EXACT_NP`, `E30_REPS`, `E30_NP`,
+`E30_LARGE_NP` and `E30_POPS` override these settings. Methods are interleaved
+in seeded random order, and guide compilation is timed separately.
+
+The forecast uses a forward SEIRS ODE, evaluated at genealogical interval
+midpoints. Unit pseudocounts, positive rate floors, numerical ODE integration
+and interval-constant guide rates affect only the proposal: the population
+simulation and importance weights are reused unchanged from FastSEIR. This is
+not analytic colour marginalization. The research prototype supports `chi=0`
+only and binds the filter parameters to its compiled guide. Raw CSVs retain
+zero-likelihood estimates as `-Inf`; summary likelihood means are on the
+natural scale, with a largest-contribution diagnostic for rare-run domination.
