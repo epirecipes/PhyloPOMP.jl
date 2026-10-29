@@ -1,5 +1,6 @@
 import Base: eachindex, length, getindex, eachindex, ==, show
 import PartiallyObservedMarkovProcesses: times, timezero
+using Random: AbstractRNG, default_rng
 
 """
     NodeType
@@ -162,6 +163,70 @@ set_time!(G::Genealogy, time::Real) = begin
 end
 
 set_time!(G::Genealogy, time::Missing) = nothing
+
+"""
+    curtail(g, time)
+
+The genealogy, on the interval from `timezero(g)` to `time`, of the
+samples of the [`Genealogy`](@ref) `g` taken by `time`: that is, the
+genealogy that would have been observed at `time`.
+"""
+curtail(g::Genealogy, time::Real) = begin
+    @assert g.t0 ≤ time ≤ g.time "`time` must lie in the interval of the genealogy"
+    keep = [n.type == Sample && n.slate ≤ time for n ∈ g.nodes]
+    subgenealogy(g,keep,time)
+end
+
+"""
+    thin(g, p; rng = default_rng())
+
+The genealogy of a random subset of the samples of the [`Genealogy`](@ref)
+`g`, each sample being retained independently with probability `p`.  If
+samples are taken from infected individuals at a rate `ψ` without
+removing them, the result is distributed as a genealogy of the same
+model with sampling rate `p*ψ`.
+"""
+thin(g::Genealogy, p::Real; rng::AbstractRNG = default_rng()) = begin
+    @assert 0 ≤ p ≤ 1 "`p` must be a probability"
+    keep = [n.type == Sample && rand(rng) < p for n ∈ g.nodes]
+    subgenealogy(g,keep,g.time)
+end
+
+## The genealogy of the samples `k` of `g` for which `keep[k]`, on the
+## interval `[g.t0, time]`.  Nodes without kept samples at or below them
+## disappear, as do samples that are not kept and branch points with kept
+## samples below only one branch.
+subgenealogy(g::Genealogy{D}, keep, time) where D = begin
+    n = length(g)
+    sampled = falses(n)         # is there a kept sample at or below node k?
+    nsampled = zeros(Int,n)     # number of children with kept samples below them
+    for k ∈ Iterators.reverse(1:n)      # children follow their parents
+        sampled[k] |= keep[k]
+        q = g[k].parent
+        if sampled[k] && !isnothing(q)
+            sampled[q] = true
+            nsampled[q] += 1
+        end
+    end
+    visible(k) = sampled[k] &&
+        (g[k].type == Root || keep[k] || (g[k].type == Node && nsampled[k] ≥ 2))
+    G = Genealogy{D}(g.t0,time)
+    name = zeros(Int,n)         # name in G of the nearest visible ancestor (or self)
+    for k ∈ 1:n
+        sampled[k] || continue
+        q = g[k].parent
+        if visible(k)
+            par = isnothing(q) ? nothing : Name(name[q])
+            push!(G.nodes, GenealNode{D.DemeSet}(length(G.nodes)+1,g[k].slate,g[k].deme,g[k].type,par))
+            isnothing(par) || push!(G.nodes[par].children, Name(length(G.nodes)))
+            name[k] = length(G.nodes)
+        else
+            name[k] = name[q]
+        end
+    end
+    repair!(G)
+    G
+end
 
 Base.show(
     io::IO,

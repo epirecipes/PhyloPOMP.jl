@@ -46,6 +46,25 @@ import PartiallyObservedMarkovProcesses as POMP
                  (GuidedSEIR.Demes.Expos, GuidedSEIR.Demes.Infec)=>1)
     @test isfinite(logLik(pfilter(GuidedSEIR.filter_pomp(g, m; par...), Np=200)))
 
+    @info h2("curtailing and thinning genealogies")
+    @test curtail(g, g.time) == g
+    @test thin(g, 1) == g
+    @test thin(g, 0).nsample == 0
+    ## the history up to a time does not depend on how long the simulation runs
+    for seed ∈ 1:5
+        whole = SimSEIR.simulate(; par..., time=50.0, rng=Xoshiro(seed)).genealogy
+        part = SimSEIR.simulate(; par..., time=30.0, rng=Xoshiro(seed)).genealogy
+        @test curtail(whole, 30.0) == part
+    end
+    ## thinning the samples by p is equivalent to sampling at rate p*ψ
+    sims(ψ, p) = map(1:400) do _
+        h = thin(SimSEIR.simulate(; par..., ψ, time=25.0).genealogy, p)
+        Float64[h.nsample, length(nodes(h)), length(roots(h))]
+    end
+    a, b = sims(0.1, 0.5), sims(0.05, 1)
+    z = (sum(a)-sum(b)) ./ sqrt.(sum(x -> x.^2, a) .+ sum(x -> x.^2, b) .- (sum(a).^2 .+ sum(b).^2)/400)
+    @test all(abs.(z) .< 4)
+
 end
 
 end

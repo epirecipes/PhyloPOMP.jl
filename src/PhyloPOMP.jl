@@ -22,7 +22,7 @@ export @demes
 include("demes.jl")
 
 export GenealNode, Genealogy, times, timezero, roots, tips,
-    nsample, samples, nodes
+    nsample, samples, nodes, curtail, thin
 include("genealogy.jl")
 
 export parse_newick
