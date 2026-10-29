@@ -1,10 +1,11 @@
 # Inference experiments
 
 Experiments on improving inference with the SEIRS genealogy likelihood, run on the
-`inference-experiments` branch. That branch is `master` plus the four reviewed fork
+`inference-experiments` branch. That branch is `master` plus the reviewed fork
 branches: `FastSEIR` (fast filter), `ExactSEIR` (exact likelihood for small problems),
-`SimSEIR` (genealogy simulator) and the transmission-support fix. Everything targets
-Julia 1.13.
+`SimSEIR` (genealogy simulator), the transmission-support fix, and
+`feature/fast-mif`, which packages E19's iterated filtering as `mif` on a
+`FastSEIR.Tree`. Everything targets Julia 1.13.
 
 The research modules here reuse `FastSEIR`'s internals and are not part of the
 package.
@@ -15,7 +16,7 @@ package.
 | `apf_filter.jl` | `APF` | next-event look-ahead auxiliary particle filter |
 | `weight_components.jl` | `WeightDiag` | per-component decomposition of the particle weights |
 | `weighted_filter.jl` | `WFilter` | weighted-rate and twisted (Doob-style) proposals |
-| `fast_mif.jl` | `FastMif` | iterated filtering (IF2) with per-particle parameters |
+| `fast_mif.jl` | `FastMif` | iterated filtering (IF2) with per-particle parameters; the prototype of the package's `mif(tr::Tree; ...)` |
 
 ## Setup
 
