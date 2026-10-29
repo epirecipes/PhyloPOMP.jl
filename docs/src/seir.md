@@ -197,3 +197,13 @@ tr = FastSEIR.Tree(g, fsmarkov(Expos=>0.1, Infec=>1, (Expos,Infec)=>1))
 pf = pfilter(tr; Np = 16000, θ..., rng = Xoshiro(1066))
 map(x -> round(x, digits = 1), FastSEIR.score(pf; θ...)[(:β, :γ)])
 ```
+
+On branch `feature/fixed-lag-score`, `pfilter(tr; smoothing_lag = 20, ...)`
+instead freezes each interval's expected sufficient statistics after 20
+further weighting updates. The score can have lower Monte Carlo variance,
+but is biased because later observations are omitted; the lag is measured
+in filter updates, not elapsed time. The likelihood and particle trajectories
+are unchanged. `smoothing_lag = nothing` (the default), or a lag spanning
+the whole genealogy, retains the full path-space estimator. Experiment
+`experiments/e28_fixed_lag.jl` measures the bias--variance tradeoff against
+exact likelihood derivatives and high-particle path-space references.

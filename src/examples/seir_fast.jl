@@ -168,6 +168,48 @@ const STATS = (
 )
 const SuffStats = NamedTuple{STATS,NTuple{length(STATS),Float64}}
 
+struct LaggedStats
+    increments::Array{Float64,3}
+    parents::Matrix{Int}
+    previous::Matrix{Float64}
+    total::Vector{Float64}
+    lineage::Vector{Int}
+end
+
+LaggedStats(Np, lag) = LaggedStats(
+    zeros(length(STATS),Np,lag+1), zeros(Int,Np,lag+1),
+    zeros(length(STATS),Np), zeros(length(STATS)), collect(1:Np),
+)
+
+## Freeze each increment after `lag` further weighting updates. At the end,
+## flush the unfinished tail using the final weights and its actual ancestry.
+lagged_stats!(s::LaggedStats, stats, W, step, final) = begin
+    depth = size(s.parents,2)
+    slot = mod1(step,depth)
+    @views s.increments[:,:,slot] .= stats .- s.previous
+    s.lineage .= eachindex(W)
+    oldest = max(1,step-depth+1)
+    for past ∈ step:-1:oldest
+        if final || past == step-depth+1
+            j = mod1(past,depth)
+            for i ∈ eachindex(W)
+                W[i] == 0 && continue
+                a = s.lineage[i]
+                for r ∈ eachindex(s.total)
+                    s.total[r] += W[i]*s.increments[r,a,j]
+                end
+            end
+        end
+        if past > oldest
+            j = mod1(past-1,depth)
+            for i ∈ eachindex(W)
+                s.lineage[i] = s.parents[s.lineage[i],j]
+            end
+        end
+    end
+    nothing
+end
+
 word(b) = (Int(b)-1)>>6 + 1
 bit(b) = one(UInt64) << ((Int(b)-1)&63)
 isinfec(P::Particles, i, b) = P.col[word(b),i] & bit(b) ≠ 0
@@ -366,7 +408,8 @@ The result of running `pfilter` on a [`Tree`](@ref PhyloPOMP.FastSEIR.Tree).
 estimate and, for each interval, the effective sample size and the
 conditional log likelihood.  `suffstats` holds estimates of the
 expectations, given the genealogy, of the complete-data sufficient
-statistics (see [`em`](@ref PhyloPOMP.FastSEIR.em)).
+statistics (see [`em`](@ref PhyloPOMP.FastSEIR.em)). With `smoothing_lag`,
+these use a fixed-lag approximation rather than the full genealogy.
 """
 struct FastPfilterd
     "log likelihood estimate"
@@ -392,7 +435,7 @@ POMP.cond_logLik(pf::FastPfilterd) = pf.cond_logLik
             β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02, χ = 0.0,
             pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08,
             proposal = :local, guided = true, trigger = 1,
-            threaded = true, rng = default_rng())
+            threaded = true, smoothing_lag = nothing, rng = default_rng())
 
 Run the particle filter with `Np` particles on the compiled genealogy
 `tr`.  The model parameters have the same meanings and defaults as in
@@ -407,6 +450,14 @@ the `filter_pomp` constructors of the other SEIR modules.
   `trigger*Np` (by default, after every genealogical event).
 - `threaded`: propagate the particles on all available threads.  The
   results depend on `rng` but not on the number of threads.
+- `smoothing_lag`: by default, estimate sufficient statistics from the
+  final particles' full ancestral paths. A nonnegative integer instead
+  freezes each interval's expected contribution after that many further
+  weighting updates (not units of time). Zero uses filtering expectations;
+  a lag spanning the genealogy reproduces the default. The unfinished
+  tail uses the final weights. A finite lag can reduce score variance
+  but introduces truncation bias; it does not change the likelihood or
+  the particle trajectories. Additional memory is O(`Np*(smoothing_lag+1)`).
 
 Returns a [`FastPfilterd`](@ref PhyloPOMP.FastSEIR.FastPfilterd) object.
 """
@@ -419,9 +470,11 @@ POMP.pfilter(
     guided::Bool = true,
     trigger::Real = 1,
     threaded::Bool = true,
+    smoothing_lag::Union{Nothing,Integer} = nothing,
     rng::AbstractRNG = default_rng(),
 ) = begin
     @assert proposal ∈ (:local, :uniform) "unknown proposal '$proposal'"
+    @assert isnothing(smoothing_lag) || smoothing_lag ≥ 0 "smoothing_lag must be nonnegative"
     useguide = guided && tr.guided
     p = map(Float64, (;β,σ,γ,ω,ψ,χ,pop))
     M = length(tr.time)
@@ -440,6 +493,8 @@ POMP.pfilter(
     suff = SuffStats(ntuple(_->NaN,length(STATS)))   # set at the end
     ## apply the events at the initial time
     k0 = findlast(==(tr.time[1]),tr.time)
+    lagged = !isnothing(smoothing_lag) && smoothing_lag < M-k0 ?
+        LaggedStats(Np,smoothing_lag) : nothing
     for j ∈ 1:k0
         foreach_particle(P,seed,-j,threaded) do P, i, rng
             singular_part!(tr,P,i,j,p,rng;guided=useguide)
@@ -464,16 +519,27 @@ POMP.pfilter(
         ess[k] = 1/sum(abs2,W)
         zerofrac[k] = count(iszero,W)/Np
         ## the particles' paths approximate the smoothing distribution
-        k == M && (suff = SuffStats(Tuple(P.stats*W)))
+        if isnothing(lagged)
+            k == M && (suff = SuffStats(Tuple(P.stats*W)))
+        else
+            lagged_stats!(lagged,P.stats,W,k-k0+1,k==M)
+            k == M && (suff = SuffStats(Tuple(lagged.total)))
+        end
         P.ll .= 0.0
         if ess[k] ≤ trigger*Np
             systematic!(ancestors,W,rng)
+            if !isnothing(lagged)
+                lagged.parents[:,mod1(k-k0+1,size(lagged.parents,2))] .= ancestors
+            end
             for (j,a) ∈ enumerate(ancestors)
                 copyparticle!(Q,j,P,a)
             end
             P, Q = Q, P
             W .= 1/Np
+        elseif !isnothing(lagged)
+            lagged.parents[:,mod1(k-k0+1,size(lagged.parents,2))] .= 1:Np
         end
+        isnothing(lagged) || (lagged.previous .= P.stats)
     end
     FastPfilterd(loglik,ess,cll,zerofrac,nevents,suff)
 end
@@ -720,7 +786,8 @@ complete_mle(s) = (
 
 Estimate the derivatives of the log likelihood with respect to the
 logarithms of the rates, by Fisher's identity, from the sufficient
-statistics of `pf`, a `pfilter` run with the given rates.
+statistics of `pf`, a `pfilter` run with the given rates. A finite
+`smoothing_lag` in that run gives a biased, fixed-lag approximation.
 """
 score(pf::FastPfilterd; β, σ, γ, ω, ψ, χ, _...) = begin
     s = pf.suffstats

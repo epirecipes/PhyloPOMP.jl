@@ -83,6 +83,56 @@ using PhyloPOMP.FastSEIR.Demes: Expos, Infec
     ## from the poor start, EM raises the recovery rate towards its estimate
     @test coef(ef).γ > start.γ + 0.03
 
+    @info h2("fixed-lag sufficient statistics")
+    ## Hand-computed ancestry with a duplicated parent, an identity step,
+    ## a permutation, ring-buffer wraparound, and an unfinished final tail.
+    history = FastSEIR.LaggedStats(2,1)
+    stats = zeros(length(FastSEIR.STATS),2)
+    for (step, (values, weights, parents)) ∈ enumerate((
+        ((1.0,10.0), [0.25,0.75], [2,2]),
+        ((12.0,14.0), [0.6,0.4], [1,2]),
+        ((15.0,19.0), [0.2,0.8], [2,1]),
+        ((26.0,26.0), [0.75,0.25], [1,2]),
+    ))
+        stats[1,:] .= values
+        FastSEIR.lagged_stats!(history,stats,weights,step,step==4)
+        history.parents[:,mod1(step,2)] .= parents
+        history.previous .= stats[:,parents]
+    end
+    @test history.total[1] ≈ 10 + 3.6 + 4.5 + 8
+    @test all(iszero,history.total[2:end])
+    online = FastSEIR.LaggedStats(2,0)
+    stats[1,:] .= (1.0,10.0)
+    FastSEIR.lagged_stats!(online,stats,[0.25,0.75],1,false)
+    online.previous .= stats
+    stats[1,:] .= (3.0,14.0)
+    FastSEIR.lagged_stats!(online,stats,[0.6,0.4],2,true)
+    @test online.total[1] ≈ 7.75 + 2.8
+
+    baseline = pfilter(tr; Np=200, rng=Xoshiro(28))
+    for lag ∈ (0,1,7,length(tr.time),typemax(Int))
+        lagpf = pfilter(tr; Np=200, smoothing_lag=lag, rng=Xoshiro(28))
+        @test logLik(lagpf) == logLik(baseline)
+        @test lagpf.nevents == baseline.nevents
+        @test cond_logLik(lagpf) == cond_logLik(baseline)
+        @test lagpf.suffstats.samples ≈ count(==(PhyloPOMP.Sample),tr.type)
+        @test lagpf.suffstats.destructive == 0
+        @test all(isfinite,FastSEIR.score(lagpf; β=4, σ=1, γ=1, ω=1, ψ=0.02, χ=0))
+        lag ≥ length(tr.time) && @test lagpf.suffstats == baseline.suffstats
+    end
+    @test_throws AssertionError pfilter(tr; smoothing_lag=-1)
+    for trigger ∈ (0.0,0.5,1.0)
+        lagpf = pfilter(tr; Np=200, smoothing_lag=7, trigger, rng=Xoshiro(29))
+        serial = pfilter(tr; Np=200, smoothing_lag=7, trigger, rng=Xoshiro(29), threaded=false)
+        @test lagpf.suffstats == serial.suffstats
+        @test logLik(lagpf) == logLik(pfilter(tr; Np=200, trigger, rng=Xoshiro(29)))
+    end
+    initial = parse_newick("(([&&PhyloPOMP type=sample]:0.9)[&&PhyloPOMP type=sample]:0.6);", time=1.8)
+    initial[2].slate = 0.0
+    initialpf = pfilter(FastSEIR.Tree(initial,m); Np=300, par..., smoothing_lag=0, rng=Xoshiro(30))
+    @test isfinite(logLik(initialpf))
+    @test initialpf.suffstats.samples ≈ 2
+
 end
 
 end
