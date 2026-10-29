@@ -41,5 +41,6 @@ changed through the environment variables read at the top of each script.
 | `e19_mif.jl` | Can FastSEIR drive IF2 and profile likelihoods? | Yes: seconds per fit on a 92-sample tree. The MCAP β CI [2.23, 5.86] covers the truth (4). |
 | `e20_scaling.jl` | How many particles does `seir_trees[2]` need at the defaults? | It is pre-asymptotic below ~64k. At 64k, SD is 3.0 in 81 s (8 threads); SD ≈ 1 needs ≈560k particles. |
 | `e21_tree2_mif.jl`, `e21b_refine.jl` | Do the default parameters fit `seir_trees[2]`? | No. IF2 raises the log-likelihood by ≈2,080 units (β≈2.8, σ≈0.6, γ≈0.48, ω≈5.2, ψ≈0.027, pop≈173). There the plain filter has SD 0.68 at Np = 4000 in 6 s, so the tree-2 degeneracy above was model misfit. |
+| `e22_threads.jl` | Is threading a bottleneck? | No. Keeping the state in locals and copying in parallel gives bitwise-identical results within noise of the old code. Contiguous chunks unbalance the work after resampling, and greedy scheduling is harmful on a loaded machine. The filter scales about 5.4× on 8 threads when the machine is quiet. |
 
 A lab notebook with the details, in OKF format, is kept outside the repository.
