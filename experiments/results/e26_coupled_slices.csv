@@ -1,0 +1,511 @@
+method,β,replicate,logLik
+"fast, independent",2.5,1,-474.9096505190856
+"fast, independent",2.75,1,-472.6424931275932
+"fast, independent",3.0,1,-470.9248916799787
+"fast, independent",3.25,1,-468.6234894860999
+"fast, independent",3.5,1,-467.4206609255319
+"fast, independent",3.75,1,-467.51339823232996
+"fast, independent",4.0,1,-466.71019860112204
+"fast, independent",4.25,1,-466.13167173406663
+"fast, independent",4.5,1,-466.93753425336007
+"fast, independent",4.75,1,-466.04745123755333
+"fast, independent",5.0,1,-467.05642773927536
+"fast, independent",5.25,1,-467.5847228913795
+"fast, independent",5.5,1,-465.6999752332999
+"fast, independent",5.75,1,-465.7792034102676
+"fast, independent",6.0,1,-464.6225981551168
+"fast, independent",6.25,1,-468.3175301713876
+"fast, independent",6.5,1,-466.92140669140696
+"fast, independent",2.5,2,-475.9224490167651
+"fast, independent",2.75,2,-473.52563405012154
+"fast, independent",3.0,2,-469.8162707132271
+"fast, independent",3.25,2,-469.79214545939976
+"fast, independent",3.5,2,-466.0357401940215
+"fast, independent",3.75,2,-466.000140862214
+"fast, independent",4.0,2,-466.9940779236189
+"fast, independent",4.25,2,-465.276090728822
+"fast, independent",4.5,2,-466.3279783457925
+"fast, independent",4.75,2,-465.4316469766607
+"fast, independent",5.0,2,-464.9297599339464
+"fast, independent",5.25,2,-464.8959528702714
+"fast, independent",5.5,2,-467.1611190069153
+"fast, independent",5.75,2,-464.61022162370557
+"fast, independent",6.0,2,-466.46979390579605
+"fast, independent",6.25,2,-468.45174904088424
+"fast, independent",6.5,2,-467.6641660421389
+"fast, independent",2.5,3,-475.2055775743398
+"fast, independent",2.75,3,-472.42440670313465
+"fast, independent",3.0,3,-470.3335164338491
+"fast, independent",3.25,3,-469.1206174740886
+"fast, independent",3.5,3,-467.8635212775323
+"fast, independent",3.75,3,-466.9451957770404
+"fast, independent",4.0,3,-464.0007529859886
+"fast, independent",4.25,3,-464.8287939703186
+"fast, independent",4.5,3,-465.0699489705717
+"fast, independent",4.75,3,-465.5673718373143
+"fast, independent",5.0,3,-465.66700602403074
+"fast, independent",5.25,3,-465.4757859667136
+"fast, independent",5.5,3,-465.613769647763
+"fast, independent",5.75,3,-465.3838281959682
+"fast, independent",6.0,3,-467.0900936847687
+"fast, independent",6.25,3,-467.329476555939
+"fast, independent",6.5,3,-469.72255840054163
+"fast, independent",2.5,4,-474.1151318202528
+"fast, independent",2.75,4,-472.8255132307026
+"fast, independent",3.0,4,-468.9134242964066
+"fast, independent",3.25,4,-469.25854185821214
+"fast, independent",3.5,4,-467.021160132975
+"fast, independent",3.75,4,-466.89444338747955
+"fast, independent",4.0,4,-466.09747162898503
+"fast, independent",4.25,4,-464.73389971122566
+"fast, independent",4.5,4,-466.31424457292246
+"fast, independent",4.75,4,-467.7893408776572
+"fast, independent",5.0,4,-466.1588882512238
+"fast, independent",5.25,4,-464.1656591263851
+"fast, independent",5.5,4,-466.8030335143567
+"fast, independent",5.75,4,-467.1776674716309
+"fast, independent",6.0,4,-464.73978975765385
+"fast, independent",6.25,4,-466.89579133270774
+"fast, independent",6.5,4,-469.7497801096608
+"fast, independent",2.5,5,-474.46793568822943
+"fast, independent",2.75,5,-471.71340233508846
+"fast, independent",3.0,5,-468.6513939805958
+"fast, independent",3.25,5,-468.85484368018285
+"fast, independent",3.5,5,-467.7801731626756
+"fast, independent",3.75,5,-464.98619481214513
+"fast, independent",4.0,5,-466.10197492289984
+"fast, independent",4.25,5,-465.82780210781686
+"fast, independent",4.5,5,-463.5313896928777
+"fast, independent",4.75,5,-467.1075434689942
+"fast, independent",5.0,5,-465.34127399712395
+"fast, independent",5.25,5,-465.8070927844805
+"fast, independent",5.5,5,-467.55086633744634
+"fast, independent",5.75,5,-465.4882323422229
+"fast, independent",6.0,5,-466.44809646865036
+"fast, independent",6.25,5,-467.91703967712385
+"fast, independent",6.5,5,-466.29444075158995
+"fast, independent",2.5,6,-476.78880643178735
+"fast, independent",2.75,6,-472.37341397130746
+"fast, independent",3.0,6,-470.2815797868764
+"fast, independent",3.25,6,-467.22405606261896
+"fast, independent",3.5,6,-466.2960052798053
+"fast, independent",3.75,6,-465.7367615625871
+"fast, independent",4.0,6,-465.9078585759113
+"fast, independent",4.25,6,-466.16853420596317
+"fast, independent",4.5,6,-464.74324223355427
+"fast, independent",4.75,6,-467.0805248384896
+"fast, independent",5.0,6,-464.7675239480971
+"fast, independent",5.25,6,-465.76991614439686
+"fast, independent",5.5,6,-468.3674634926555
+"fast, independent",5.75,6,-466.3227559679799
+"fast, independent",6.0,6,-467.8607126874541
+"fast, independent",6.25,6,-467.84371997728164
+"fast, independent",6.5,6,-467.9970282816132
+"fast, independent",2.5,7,-475.30183569227745
+"fast, independent",2.75,7,-472.2640786409789
+"fast, independent",3.0,7,-470.6746382088913
+"fast, independent",3.25,7,-467.48155497873853
+"fast, independent",3.5,7,-467.8980270838089
+"fast, independent",3.75,7,-465.1932091449215
+"fast, independent",4.0,7,-465.96075581718424
+"fast, independent",4.25,7,-466.9751214973251
+"fast, independent",4.5,7,-466.2130372048379
+"fast, independent",4.75,7,-466.5228712278401
+"fast, independent",5.0,7,-466.85430485438667
+"fast, independent",5.25,7,-466.7444249370176
+"fast, independent",5.5,7,-465.4626324451782
+"fast, independent",5.75,7,-466.00660081050404
+"fast, independent",6.0,7,-470.07778953324663
+"fast, independent",6.25,7,-468.78044869560085
+"fast, independent",6.5,7,-466.18454567215844
+"fast, independent",2.5,8,-475.95886132670364
+"fast, independent",2.75,8,-473.1856944129509
+"fast, independent",3.0,8,-470.5297815056542
+"fast, independent",3.25,8,-469.020894106405
+"fast, independent",3.5,8,-467.0219426171212
+"fast, independent",3.75,8,-466.9976694375789
+"fast, independent",4.0,8,-466.8585739364105
+"fast, independent",4.25,8,-465.8760243599997
+"fast, independent",4.5,8,-467.856741386943
+"fast, independent",4.75,8,-465.5425738039062
+"fast, independent",5.0,8,-464.81235145670956
+"fast, independent",5.25,8,-467.1204308047047
+"fast, independent",5.5,8,-465.35026892611364
+"fast, independent",5.75,8,-464.6787482578101
+"fast, independent",6.0,8,-470.7655857716958
+"fast, independent",6.25,8,-467.0936594027796
+"fast, independent",6.5,8,-468.10040983846903
+"fast, independent",2.5,9,-474.5821954152653
+"fast, independent",2.75,9,-474.0644402870631
+"fast, independent",3.0,9,-470.428053151811
+"fast, independent",3.25,9,-469.5864282568868
+"fast, independent",3.5,9,-465.55833265624665
+"fast, independent",3.75,9,-467.5734697297697
+"fast, independent",4.0,9,-466.3654808129541
+"fast, independent",4.25,9,-465.64734947256824
+"fast, independent",4.5,9,-466.7869676989784
+"fast, independent",4.75,9,-465.5023263860622
+"fast, independent",5.0,9,-465.69906665233356
+"fast, independent",5.25,9,-466.1870580249537
+"fast, independent",5.5,9,-467.86761935192135
+"fast, independent",5.75,9,-466.8969858522378
+"fast, independent",6.0,9,-465.1105288876615
+"fast, independent",6.25,9,-466.7371862499267
+"fast, independent",6.5,9,-468.64107952566985
+"fast, independent",2.5,10,-476.02082170383306
+"fast, independent",2.75,10,-470.00417233300465
+"fast, independent",3.0,10,-471.0492313787397
+"fast, independent",3.25,10,-467.60895815621006
+"fast, independent",3.5,10,-467.0012561918084
+"fast, independent",3.75,10,-466.28934386517744
+"fast, independent",4.0,10,-466.4808580442213
+"fast, independent",4.25,10,-465.6386666310722
+"fast, independent",4.5,10,-466.29150715084916
+"fast, independent",4.75,10,-464.62798982331145
+"fast, independent",5.0,10,-467.5044913242673
+"fast, independent",5.25,10,-466.9956854938037
+"fast, independent",5.5,10,-466.6930576334003
+"fast, independent",5.75,10,-466.79090803421013
+"fast, independent",6.0,10,-467.2844265770388
+"fast, independent",6.25,10,-467.2803795604587
+"fast, independent",6.5,10,-467.64271270108185
+"fast, shared rng",2.5,1,-476.30027737447085
+"fast, shared rng",2.75,1,-471.2285427938466
+"fast, shared rng",3.0,1,-468.693118031247
+"fast, shared rng",3.25,1,-467.70186717330665
+"fast, shared rng",3.5,1,-467.001046747147
+"fast, shared rng",3.75,1,-467.14000217339094
+"fast, shared rng",4.0,1,-465.5749155165268
+"fast, shared rng",4.25,1,-466.151940204043
+"fast, shared rng",4.5,1,-463.9388379152044
+"fast, shared rng",4.75,1,-466.24114343674
+"fast, shared rng",5.0,1,-465.8761354302362
+"fast, shared rng",5.25,1,-466.74592056981567
+"fast, shared rng",5.5,1,-465.16962100297
+"fast, shared rng",5.75,1,-466.03882423544627
+"fast, shared rng",6.0,1,-466.58480950867283
+"fast, shared rng",6.25,1,-466.2085377041034
+"fast, shared rng",6.5,1,-467.33165684756574
+"fast, shared rng",2.5,2,-475.1663154257681
+"fast, shared rng",2.75,2,-472.9548321177641
+"fast, shared rng",3.0,2,-468.0901118354632
+"fast, shared rng",3.25,2,-467.29409989009946
+"fast, shared rng",3.5,2,-467.7227749226495
+"fast, shared rng",3.75,2,-467.46235193873133
+"fast, shared rng",4.0,2,-466.6360512095303
+"fast, shared rng",4.25,2,-466.4886502475764
+"fast, shared rng",4.5,2,-465.80187874445494
+"fast, shared rng",4.75,2,-465.8353959641775
+"fast, shared rng",5.0,2,-467.46604833156977
+"fast, shared rng",5.25,2,-466.3676715103069
+"fast, shared rng",5.5,2,-466.77175096918035
+"fast, shared rng",5.75,2,-468.15669563331596
+"fast, shared rng",6.0,2,-466.8952926029229
+"fast, shared rng",6.25,2,-468.1814623362946
+"fast, shared rng",6.5,2,-469.2273642282693
+"fast, shared rng",2.5,3,-474.516039839516
+"fast, shared rng",2.75,3,-471.18739130026796
+"fast, shared rng",3.0,3,-470.9001803536357
+"fast, shared rng",3.25,3,-468.6225347468244
+"fast, shared rng",3.5,3,-467.60643117064564
+"fast, shared rng",3.75,3,-466.94453478828746
+"fast, shared rng",4.0,3,-465.7255240971117
+"fast, shared rng",4.25,3,-466.0022604667488
+"fast, shared rng",4.5,3,-464.85776401335625
+"fast, shared rng",4.75,3,-465.8461242747833
+"fast, shared rng",5.0,3,-467.16006127781804
+"fast, shared rng",5.25,3,-466.675716989911
+"fast, shared rng",5.5,3,-465.2076045414993
+"fast, shared rng",5.75,3,-466.5869783918708
+"fast, shared rng",6.0,3,-466.6920834664946
+"fast, shared rng",6.25,3,-467.65013761051375
+"fast, shared rng",6.5,3,-469.1480776418502
+"fast, shared rng",2.5,4,-475.0147446809052
+"fast, shared rng",2.75,4,-472.15640635326787
+"fast, shared rng",3.0,4,-470.9439036943626
+"fast, shared rng",3.25,4,-468.86433476000826
+"fast, shared rng",3.5,4,-467.2972714705369
+"fast, shared rng",3.75,4,-466.43835974808326
+"fast, shared rng",4.0,4,-467.1726090873993
+"fast, shared rng",4.25,4,-467.2539799759945
+"fast, shared rng",4.5,4,-464.67790459824505
+"fast, shared rng",4.75,4,-466.13788113878473
+"fast, shared rng",5.0,4,-465.52878822840074
+"fast, shared rng",5.25,4,-465.06916452253836
+"fast, shared rng",5.5,4,-465.42509945076733
+"fast, shared rng",5.75,4,-466.34991113051234
+"fast, shared rng",6.0,4,-468.4602071934768
+"fast, shared rng",6.25,4,-467.0835603078267
+"fast, shared rng",6.5,4,-468.75223755981926
+"fast, shared rng",2.5,5,-474.8432840510983
+"fast, shared rng",2.75,5,-471.9445014413061
+"fast, shared rng",3.0,5,-470.77244664064204
+"fast, shared rng",3.25,5,-469.19932193170456
+"fast, shared rng",3.5,5,-468.5876200989848
+"fast, shared rng",3.75,5,-468.40225577321604
+"fast, shared rng",4.0,5,-467.2997583913952
+"fast, shared rng",4.25,5,-466.022554580986
+"fast, shared rng",4.5,5,-467.01496103732217
+"fast, shared rng",4.75,5,-465.83671682848285
+"fast, shared rng",5.0,5,-466.3230127936812
+"fast, shared rng",5.25,5,-465.70046140799747
+"fast, shared rng",5.5,5,-465.77928937904227
+"fast, shared rng",5.75,5,-467.7550811677446
+"fast, shared rng",6.0,5,-466.3886430630158
+"fast, shared rng",6.25,5,-469.6701564202444
+"fast, shared rng",6.5,5,-469.1820962296954
+"fast, shared rng",2.5,6,-474.82422999336
+"fast, shared rng",2.75,6,-472.05894081067305
+"fast, shared rng",3.0,6,-470.3988511442791
+"fast, shared rng",3.25,6,-467.686412211367
+"fast, shared rng",3.5,6,-467.45280870269653
+"fast, shared rng",3.75,6,-466.35651642448755
+"fast, shared rng",4.0,6,-465.88321908568594
+"fast, shared rng",4.25,6,-465.5884238648368
+"fast, shared rng",4.5,6,-467.24654219796497
+"fast, shared rng",4.75,6,-465.9279877162803
+"fast, shared rng",5.0,6,-464.6148694748765
+"fast, shared rng",5.25,6,-465.9515033001529
+"fast, shared rng",5.5,6,-467.1797716246978
+"fast, shared rng",5.75,6,-464.87414912001134
+"fast, shared rng",6.0,6,-466.4206934018882
+"fast, shared rng",6.25,6,-468.632335802601
+"fast, shared rng",6.5,6,-468.48580465656636
+"fast, shared rng",2.5,7,-475.6915332695661
+"fast, shared rng",2.75,7,-470.28197318655407
+"fast, shared rng",3.0,7,-470.7693750195138
+"fast, shared rng",3.25,7,-469.0775026886046
+"fast, shared rng",3.5,7,-467.8928031047398
+"fast, shared rng",3.75,7,-466.6320500314059
+"fast, shared rng",4.0,7,-468.0990524593584
+"fast, shared rng",4.25,7,-464.9548297462747
+"fast, shared rng",4.5,7,-466.10291531094003
+"fast, shared rng",4.75,7,-466.7847754057385
+"fast, shared rng",5.0,7,-466.48253165266556
+"fast, shared rng",5.25,7,-466.5562905541439
+"fast, shared rng",5.5,7,-466.634847679127
+"fast, shared rng",5.75,7,-466.3296113950515
+"fast, shared rng",6.0,7,-467.9675682397516
+"fast, shared rng",6.25,7,-465.99176473961904
+"fast, shared rng",6.5,7,-467.5898625466549
+"fast, shared rng",2.5,8,-475.5009240746432
+"fast, shared rng",2.75,8,-471.6388308124586
+"fast, shared rng",3.0,8,-469.4111403919
+"fast, shared rng",3.25,8,-466.9587658937088
+"fast, shared rng",3.5,8,-467.72907063436907
+"fast, shared rng",3.75,8,-466.7590035822484
+"fast, shared rng",4.0,8,-465.60721405355525
+"fast, shared rng",4.25,8,-465.296906984824
+"fast, shared rng",4.5,8,-466.4458712097096
+"fast, shared rng",4.75,8,-466.3659753569488
+"fast, shared rng",5.0,8,-466.3008035499386
+"fast, shared rng",5.25,8,-463.94834566279576
+"fast, shared rng",5.5,8,-465.2549831755719
+"fast, shared rng",5.75,8,-465.67169157757996
+"fast, shared rng",6.0,8,-465.4251045345835
+"fast, shared rng",6.25,8,-467.10620475733987
+"fast, shared rng",6.5,8,-465.9150938853965
+"fast, shared rng",2.5,9,-474.35662305868686
+"fast, shared rng",2.75,9,-470.83714944444876
+"fast, shared rng",3.0,9,-470.2126608154117
+"fast, shared rng",3.25,9,-467.918163638555
+"fast, shared rng",3.5,9,-467.8394371141898
+"fast, shared rng",3.75,9,-464.30192265085043
+"fast, shared rng",4.0,9,-464.5237215715224
+"fast, shared rng",4.25,9,-464.93914468273533
+"fast, shared rng",4.5,9,-465.73346885233167
+"fast, shared rng",4.75,9,-464.720597753704
+"fast, shared rng",5.0,9,-465.59296611156935
+"fast, shared rng",5.25,9,-467.2039065206639
+"fast, shared rng",5.5,9,-465.7151386767543
+"fast, shared rng",5.75,9,-467.0360636866234
+"fast, shared rng",6.0,9,-470.11919529747627
+"fast, shared rng",6.25,9,-467.72071009685243
+"fast, shared rng",6.5,9,-465.8026822776654
+"fast, shared rng",2.5,10,-474.5575085500508
+"fast, shared rng",2.75,10,-472.91168604518793
+"fast, shared rng",3.0,10,-469.57478404051176
+"fast, shared rng",3.25,10,-467.6310585034994
+"fast, shared rng",3.5,10,-468.3574315050436
+"fast, shared rng",3.75,10,-465.9131715219637
+"fast, shared rng",4.0,10,-465.8374046719654
+"fast, shared rng",4.25,10,-466.69582398792585
+"fast, shared rng",4.5,10,-465.2568425134593
+"fast, shared rng",4.75,10,-466.5481178216878
+"fast, shared rng",5.0,10,-465.7940791588229
+"fast, shared rng",5.25,10,-467.6575536494325
+"fast, shared rng",5.5,10,-465.3571770019397
+"fast, shared rng",5.75,10,-465.00198081033847
+"fast, shared rng",6.0,10,-465.6778716361856
+"fast, shared rng",6.25,10,-466.9038482550936
+"fast, shared rng",6.5,10,-469.766022315699
+"coupled, state order",2.5,1,-474.5971373141316
+"coupled, state order",2.75,1,-472.03466758687324
+"coupled, state order",3.0,1,-469.101172245299
+"coupled, state order",3.25,1,-469.35505501006804
+"coupled, state order",3.5,1,-467.3254587277795
+"coupled, state order",3.75,1,-466.99027758930504
+"coupled, state order",4.0,1,-465.86318019229833
+"coupled, state order",4.25,1,-465.8144234860441
+"coupled, state order",4.5,1,-463.5272140927412
+"coupled, state order",4.75,1,-466.68451881593245
+"coupled, state order",5.0,1,-466.19446991383677
+"coupled, state order",5.25,1,-466.0773620672346
+"coupled, state order",5.5,1,-466.2088461108453
+"coupled, state order",5.75,1,-465.748217100385
+"coupled, state order",6.0,1,-467.50951180567847
+"coupled, state order",6.25,1,-468.5154905310695
+"coupled, state order",6.5,1,-468.65540213298397
+"coupled, state order",2.5,2,-474.35814761342283
+"coupled, state order",2.75,2,-470.9370338847324
+"coupled, state order",3.0,2,-470.74837725764223
+"coupled, state order",3.25,2,-468.5767155716095
+"coupled, state order",3.5,2,-467.3264812716641
+"coupled, state order",3.75,2,-466.67929204459716
+"coupled, state order",4.0,2,-466.9677144230281
+"coupled, state order",4.25,2,-465.2595214461923
+"coupled, state order",4.5,2,-466.2298802752317
+"coupled, state order",4.75,2,-466.28199525712085
+"coupled, state order",5.0,2,-467.70253100941306
+"coupled, state order",5.25,2,-466.4889616166938
+"coupled, state order",5.5,2,-467.1109472608509
+"coupled, state order",5.75,2,-466.4632060524965
+"coupled, state order",6.0,2,-467.4933128779298
+"coupled, state order",6.25,2,-467.0755545354505
+"coupled, state order",6.5,2,-466.9408735219755
+"coupled, state order",2.5,3,-475.22330246874134
+"coupled, state order",2.75,3,-472.7773071268839
+"coupled, state order",3.0,3,-468.03024644002335
+"coupled, state order",3.25,3,-467.03608505875036
+"coupled, state order",3.5,3,-467.2146284023261
+"coupled, state order",3.75,3,-465.71387856957244
+"coupled, state order",4.0,3,-466.36329733145624
+"coupled, state order",4.25,3,-465.7496825027969
+"coupled, state order",4.5,3,-464.92093690700426
+"coupled, state order",4.75,3,-466.2045843205706
+"coupled, state order",5.0,3,-466.80668826408515
+"coupled, state order",5.25,3,-465.6738827549655
+"coupled, state order",5.5,3,-467.6108358080544
+"coupled, state order",5.75,3,-465.79663912801897
+"coupled, state order",6.0,3,-467.4769373588481
+"coupled, state order",6.25,3,-468.24816669603956
+"coupled, state order",6.5,3,-468.4496651838243
+"coupled, state order",2.5,4,-474.83599632741704
+"coupled, state order",2.75,4,-473.6215142194172
+"coupled, state order",3.0,4,-469.7951778613418
+"coupled, state order",3.25,4,-468.46389029372915
+"coupled, state order",3.5,4,-466.82630047698325
+"coupled, state order",3.75,4,-467.0104259157323
+"coupled, state order",4.0,4,-466.5880574870902
+"coupled, state order",4.25,4,-466.4957672202046
+"coupled, state order",4.5,4,-464.99556114343596
+"coupled, state order",4.75,4,-465.45942649962154
+"coupled, state order",5.0,4,-465.0759363276883
+"coupled, state order",5.25,4,-466.58630664483735
+"coupled, state order",5.5,4,-465.15774747588443
+"coupled, state order",5.75,4,-464.86692881346363
+"coupled, state order",6.0,4,-464.2952488921283
+"coupled, state order",6.25,4,-466.70897921483106
+"coupled, state order",6.5,4,-467.6867994610781
+"coupled, state order",2.5,5,-474.01737292834815
+"coupled, state order",2.75,5,-472.21337394779516
+"coupled, state order",3.0,5,-469.9351102699152
+"coupled, state order",3.25,5,-468.4384875705712
+"coupled, state order",3.5,5,-468.23343588730074
+"coupled, state order",3.75,5,-466.8487062729534
+"coupled, state order",4.0,5,-466.14794442156693
+"coupled, state order",4.25,5,-466.546548305132
+"coupled, state order",4.5,5,-465.5330956165306
+"coupled, state order",4.75,5,-466.14274726666116
+"coupled, state order",5.0,5,-466.1019091492177
+"coupled, state order",5.25,5,-467.6171558676856
+"coupled, state order",5.5,5,-467.3992221289045
+"coupled, state order",5.75,5,-469.19311548182145
+"coupled, state order",6.0,5,-467.1773204973222
+"coupled, state order",6.25,5,-469.61801369017456
+"coupled, state order",6.5,5,-471.0074467804108
+"coupled, state order",2.5,6,-474.62034062490994
+"coupled, state order",2.75,6,-472.06416909251885
+"coupled, state order",3.0,6,-469.9172970799241
+"coupled, state order",3.25,6,-469.615464950179
+"coupled, state order",3.5,6,-467.5929253110791
+"coupled, state order",3.75,6,-467.9893248374083
+"coupled, state order",4.0,6,-466.3472932333817
+"coupled, state order",4.25,6,-465.56703189866505
+"coupled, state order",4.5,6,-463.93687418824607
+"coupled, state order",4.75,6,-464.16961010358295
+"coupled, state order",5.0,6,-464.6541646692057
+"coupled, state order",5.25,6,-464.8141552879953
+"coupled, state order",5.5,6,-465.39757864632423
+"coupled, state order",5.75,6,-466.0820114923296
+"coupled, state order",6.0,6,-465.94692307935514
+"coupled, state order",6.25,6,-467.38570474729903
+"coupled, state order",6.5,6,-466.2088170223985
+"coupled, state order",2.5,7,-474.50580520640335
+"coupled, state order",2.75,7,-470.69085961805
+"coupled, state order",3.0,7,-470.79118838514086
+"coupled, state order",3.25,7,-468.7182261104688
+"coupled, state order",3.5,7,-468.1312156904988
+"coupled, state order",3.75,7,-466.92859064150804
+"coupled, state order",4.0,7,-466.2175768735686
+"coupled, state order",4.25,7,-465.6018483940733
+"coupled, state order",4.5,7,-465.6385173747352
+"coupled, state order",4.75,7,-464.6453543771234
+"coupled, state order",5.0,7,-466.2554475836764
+"coupled, state order",5.25,7,-464.2686286150539
+"coupled, state order",5.5,7,-466.0807083378865
+"coupled, state order",5.75,7,-467.83750672277637
+"coupled, state order",6.0,7,-465.2901896647082
+"coupled, state order",6.25,7,-467.5865868909467
+"coupled, state order",6.5,7,-466.7797443621195
+"coupled, state order",2.5,8,-476.6699174264213
+"coupled, state order",2.75,8,-473.0024591503371
+"coupled, state order",3.0,8,-469.35697584367375
+"coupled, state order",3.25,8,-468.25047773642893
+"coupled, state order",3.5,8,-468.4913194092047
+"coupled, state order",3.75,8,-467.4947196163939
+"coupled, state order",4.0,8,-465.83209687422124
+"coupled, state order",4.25,8,-467.1006903754424
+"coupled, state order",4.5,8,-465.6740250617058
+"coupled, state order",4.75,8,-465.40476583183477
+"coupled, state order",5.0,8,-467.19304248464937
+"coupled, state order",5.25,8,-467.29913296846763
+"coupled, state order",5.5,8,-467.920379299211
+"coupled, state order",5.75,8,-467.9388394673816
+"coupled, state order",6.0,8,-468.31992275340303
+"coupled, state order",6.25,8,-467.62123470834604
+"coupled, state order",6.5,8,-467.38661649825303
+"coupled, state order",2.5,9,-476.45831581400444
+"coupled, state order",2.75,9,-472.3429179567277
+"coupled, state order",3.0,9,-469.55562950523546
+"coupled, state order",3.25,9,-468.3348102072214
+"coupled, state order",3.5,9,-465.97120125800706
+"coupled, state order",3.75,9,-465.5197282803659
+"coupled, state order",4.0,9,-466.73028710467594
+"coupled, state order",4.25,9,-465.85128045604466
+"coupled, state order",4.5,9,-465.5126826911649
+"coupled, state order",4.75,9,-466.81898783795003
+"coupled, state order",5.0,9,-464.9204697471356
+"coupled, state order",5.25,9,-464.9700525783137
+"coupled, state order",5.5,9,-466.84874566945757
+"coupled, state order",5.75,9,-466.7220816014301
+"coupled, state order",6.0,9,-467.428495078415
+"coupled, state order",6.25,9,-466.0735529747654
+"coupled, state order",6.5,9,-466.44518863818956
+"coupled, state order",2.5,10,-476.5279618005062
+"coupled, state order",2.75,10,-471.7727839882223
+"coupled, state order",3.0,10,-470.3626970988799
+"coupled, state order",3.25,10,-468.39927069813524
+"coupled, state order",3.5,10,-468.31280607122244
+"coupled, state order",3.75,10,-466.1202768310359
+"coupled, state order",4.0,10,-466.4331698094725
+"coupled, state order",4.25,10,-465.18330550492215
+"coupled, state order",4.5,10,-466.31113968407897
+"coupled, state order",4.75,10,-464.9306768073545
+"coupled, state order",5.0,10,-464.784803735255
+"coupled, state order",5.25,10,-466.9390875765944
+"coupled, state order",5.5,10,-466.7728046887659
+"coupled, state order",5.75,10,-467.6806808003205
+"coupled, state order",6.0,10,-467.73993063551814
+"coupled, state order",6.25,10,-467.41968258076656
+"coupled, state order",6.5,10,-467.68336975688135
