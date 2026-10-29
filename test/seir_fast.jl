@@ -47,6 +47,27 @@ using PhyloPOMP.FastSEIR.Demes: Expos, Infec
     ## the result depends on the random-number generator, not on the threads
     @test logLik(pf) == logLik(pfilter(tr, Np=500, rng=Xoshiro(17), threaded=false))
 
+    @info h2("iterated filtering")
+    ## start where the likelihood is ≈ 9 log units below its maximum
+    start = (β=8.0, γ=0.5)
+    kernel = @perturbn β ~ LogNormal(0.02) γ ~ LogNormal(0.02)
+    fit(seed) = begin
+        seed!(seed)
+        mif(tr; Np=500, Nmif=10, perturbations=kernel, cooling=geometric_cooling(0.5),
+            start..., rng=Xoshiro(seed))
+    end
+    mf = fit(5)
+    @test mf isa FastSEIR.FastMifd
+    @test length(mf.trace) == 11 && length(mf.logLik) == 10
+    @test all(isfinite, mf.logLik)
+    @test size(traces(mf)) == (11, 13)
+    @test coef(mf).σ == 1.0 && coef(mf).pop ≈ 100
+    @test coef(mf).β < start.β && coef(mf).γ > start.γ
+    ll(θ) = logmeanexp([logLik(pfilter(tr; Np=500, θ..., rng=Xoshiro(i))) for i ∈ 1:5])
+    @test ll((β=coef(mf).β, γ=coef(mf).γ)) > ll(start) + 4
+    ## the perturbations use the global generator, so seed both
+    @test coef(fit(5)) == coef(mf)
+
 end
 
 end
