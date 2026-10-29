@@ -17,7 +17,8 @@ model.  It estimates the same likelihood as the other SEIR filters, but
 - particles are propagated in parallel, with results that do not depend
   on the number of threads.
 
-Run the filter with `pfilter` on a `Tree`.
+Run the filter with `pfilter` on a `Tree`; estimate parameters by
+iterated filtering with `mif`.
 """
 module FastSEIR
 
@@ -439,6 +440,150 @@ POMP.pfilter(
         end
     end
     FastPfilterd(loglik,ess,cll,zerofrac,nevents)
+end
+
+"""
+    FastMifd
+
+The result of running `mif` on a [`Tree`](@ref PhyloPOMP.FastSEIR.Tree).
+`coef` returns the parameter estimate, `traces` the parameters and log
+likelihood at each iteration, and `logLik`, `eff_sample_size`, and
+`cond_logLik` the results of a final `pfilter` at the estimate.
+"""
+struct FastMifd{P<:NamedTuple}
+    "result of `pfilter` at the final parameter estimate"
+    pf::FastPfilterd
+    "averages of the parameters at the start and after each iteration"
+    trace::Vector{P}
+    "log likelihood of the perturbed filter at each iteration"
+    logLik::Vector{Float64}
+end
+
+POMP.logLik(m::FastMifd) = logLik(m.pf)
+POMP.eff_sample_size(m::FastMifd) = eff_sample_size(m.pf)
+POMP.cond_logLik(m::FastMifd) = cond_logLik(m.pf)
+POMP.coef(m::FastMifd) = m.trace[end]
+POMP.traces(m::FastMifd) = POMP.melt(
+    [merge(p,(logLik=l,)) for (p,l) ∈ zip(m.trace,[m.logLik...,missing])],
+    :iteration,
+)
+
+"""
+    mif(tr::Tree; Np = 1, Nmif = 1, perturbations, cooling, avfun = geomean,
+        β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02, χ = 0.0,
+        pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08,
+        proposal = :local, guided = true, threaded = true,
+        rng = default_rng())
+
+Iterated filtering (IF2) with the filter of `pfilter`, starting from the
+given model parameters.  As for the `mif` method on `PompObject`s, each
+particle carries its own parameters, which are replaced by
+`perturbations(scale, lag; params...)` at lag 0 and after each
+genealogical event, with `scale = cooling(n)` in iteration `n+1`, and
+the parameters are resampled along with the particles.  `perturbations`
+may be constructed with `@perturbn`; `cooling` with `geometric_cooling`.
+The population size `pop` is rounded to an integer.  The perturbations
+draw on the global random-number generator.
+
+Returns a [`FastMifd`](@ref PhyloPOMP.FastSEIR.FastMifd) object.
+"""
+POMP.mif(
+    tr::Tree;
+    Np::Integer = 1,
+    Nmif::Integer = 1,
+    perturbations::Function,
+    cooling::Function,
+    avfun::Function = POMP.geomean,
+    β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02, χ = 0.0,
+    pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08,
+    proposal::Symbol = :local,
+    guided::Bool = true,
+    threaded::Bool = true,
+    rng::AbstractRNG = default_rng(),
+) = begin
+    @assert proposal ∈ (:local, :uniform) "unknown proposal '$proposal'"
+    useguide = guided && tr.guided
+    θ = map(Float64, (;β,σ,γ,ω,ψ,χ,pop,S0,E0,I0,R0))
+    M = length(tr.time)
+    params = fill(θ,Np)
+    work = similar(params)
+    P = Particles(Np,tr.nwords)
+    Q = Particles(Np,tr.nwords)
+    W = zeros(Np)
+    ancestors = Vector{Int}(undef,Np)
+    trace = [θ]
+    logliks = Float64[]
+    k0 = findlast(==(tr.time[1]),tr.time)
+    for n ∈ 1:Nmif
+        scale = cooling(n-1)
+        perturb!(params,perturbations,scale,0)
+        initialize!(P,params)
+        seed = rand(rng,UInt64)
+        for j ∈ 1:k0
+            foreach_particle(P,seed,-j,threaded) do P, i, rng
+                singular_part!(tr,P,i,j,rates(params[i]),rng;guided=useguide)
+                0
+            end
+        end
+        loglik = 0.0
+        for k ∈ k0:M
+            foreach_particle(P,seed,k,threaded) do P, i, rng
+                isfinite(P.ll[i]) || return 0
+                p = rates(params[i])
+                regular_part!(tr,P,i,k,p,rng;proposal,guided=useguide)
+                k < M && singular_part!(tr,P,i,k+1,p,rng;guided=useguide)
+                0
+            end
+            llmax = maximum(P.ll)
+            isfinite(llmax) || error("in iteration $n, no particle is compatible with event $(k+1)")
+            W .= exp.(P.ll .- llmax)
+            s = sum(W)
+            loglik += llmax+log(s/Np)
+            W ./= s
+            systematic!(ancestors,W,rng)
+            for (j,a) ∈ enumerate(ancestors)
+                copyparticle!(Q,j,P,a)
+                work[j] = params[a]
+            end
+            P, Q = Q, P
+            params .= work
+            if k < M || n < Nmif
+                perturb!(params,perturbations,scale,k-k0+1)
+            end
+        end
+        push!(logliks,loglik)
+        push!(trace,average(params,avfun))
+    end
+    est = trace[end]
+    pf = pfilter(tr; Np, est..., pop=round(Int,est.pop), proposal, guided, threaded, rng)
+    FastMifd(pf,trace,logliks)
+end
+
+## model rates of a particle's parameters
+rates(θ) = (β=θ.β, σ=θ.σ, γ=θ.γ, ω=θ.ω, ψ=θ.ψ, χ=θ.χ, pop=round(θ.pop))
+
+## set each particle to its initial state, with no lineages
+initialize!(P::Particles, params) = begin
+    P.ellE .= 0; P.ellI .= 0; P.col .= 0; P.ll .= 0.0
+    for (i,θ) ∈ enumerate(params)
+        P.S[i], P.E[i], P.I[i], P.R[i] =
+            barycentric(Int64,(θ.S0,θ.E0,θ.I0,θ.R0),round(Int,θ.pop))
+    end
+    P
+end
+
+## apply the perturbation kernel to each particle's parameters
+perturb!(params, f, scale, lag) = begin
+    for i ∈ eachindex(params)
+        params[i] = merge(params[i],map(Float64,f(scale,lag;params[i]...)))
+    end
+    params
+end
+
+## average of the parameters over the particles
+average(params, avfun) = begin
+    names = keys(first(params))
+    NamedTuple{names}(map(n -> avfun(getfield.(params,n)),names))
 end
 
 ## Apply `f(P, i, rng)` to each particle `i` and return the sum of the

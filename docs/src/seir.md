@@ -154,3 +154,26 @@ tr = FastSEIR.Tree(g, fsmarkov(Expos=>0.1, Infec=>1, (Expos,Infec)=>1))
 pf = pfilter(tr, Np = 1000, rng = Xoshiro(351956486))
 round(logLik(pf), digits = 1)
 ```
+
+Parameters can be estimated by iterated filtering with `mif`, which
+takes the same perturbation kernels and cooling schedules as the `mif`
+method on `PompObject`s.  Here `β` and `γ` start from 8 and 0.5.
+
+```@example
+using Random: Xoshiro, seed!
+using PhyloPOMP
+using PhyloPOMP.FastSEIR
+using PhyloPOMP.FastSEIR.Demes: Expos, Infec
+
+g = parse_newick(FastSEIR.seir_trees[1], time = 50.0)
+tr = FastSEIR.Tree(g, fsmarkov(Expos=>0.1, Infec=>1, (Expos,Infec)=>1))
+seed!(1066)
+mf = mif(
+    tr, Np = 1000, Nmif = 20,
+    perturbations = @perturbn(β ~ LogNormal(0.02), γ ~ LogNormal(0.02)),
+    cooling = geometric_cooling(0.5),
+    β = 8.0, γ = 0.5,
+    rng = Xoshiro(1066),
+)
+map(x -> round(x, digits = 2), coef(mf)[(:β, :γ)]), round(logLik(mf), digits = 1)
+```
