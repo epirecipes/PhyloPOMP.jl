@@ -18,7 +18,7 @@ model.  It estimates the same likelihood as the other SEIR filters, but
   on the number of threads.
 
 Run the filter with `pfilter` on a `Tree`; estimate parameters by
-iterated filtering with `mif`.
+iterated filtering with `mif` or by expectation-maximization with `em`.
 """
 module FastSEIR
 
@@ -148,12 +148,25 @@ struct Particles
     ellI::Vector{Int}
     col::Matrix{UInt64}
     ll::Vector{Float64}
+    stats::Matrix{Float64}
 end
 
 Particles(Np::Integer, nwords::Integer) = Particles(
     zeros(Int,Np), zeros(Int,Np), zeros(Int,Np), zeros(Int,Np),
     zeros(Int,Np), zeros(Int,Np), zeros(UInt64,nwords,Np), zeros(Np),
+    zeros(length(STATS),Np),
 )
+
+## The complete-data sufficient statistics accumulated along the path of
+## each particle (column `i` of `stats`): the numbers of transmissions
+## (including those at branch points), progressions, recoveries, losses
+## of immunity, and non-destructive and destructive samples, and the
+## integrals over time of `S*I/pop`, `E`, `I`, and `R`.
+const STATS = (
+    :transmissions, :progressions, :recoveries, :wanings,
+    :samples, :destructive, :SI, :E, :I, :R,
+)
+const SuffStats = NamedTuple{STATS,NTuple{length(STATS),Float64}}
 
 word(b) = (Int(b)-1)>>6 + 1
 bit(b) = one(UInt64) << ((Int(b)-1)&63)
@@ -166,6 +179,7 @@ copyparticle!(Q::Particles, j, P::Particles, i) = begin
     Q.ellE[j] = P.ellE[i]; Q.ellI[j] = P.ellI[i]
     Q.col[:,j] .= @view(P.col[:,i])
     Q.ll[j] = 0.0
+    Q.stats[:,j] .= @view(P.stats[:,i])
     nothing
 end
 
@@ -233,6 +247,9 @@ regular_part!(
     tf = tr.tend[k]
     ll = P.ll[i]
     nevent = 0
+    ## event counts and integrals for the sufficient statistics
+    nT = nP = nR = nW = 0
+    ∫SI = ∫E = ∫I = ∫R = 0.0
     while true
         S, E, I, R, ellI = P.S[i], P.E[i], P.I[i], P.R[i], P.ellI[i]
         transmission = β*S*I/pop
@@ -242,11 +259,11 @@ regular_part!(
         decay = (ψ+χ)*I + @indicator(I ≤ ellI, γ*I)
         rate = transmission+progression+recovery+waning
         step = randexp(rng)/rate
-        if t+step ≥ tf
-            ll -= decay*(tf-t)
-            break
-        end
-        ll -= decay*step
+        done = t+step ≥ tf
+        Δ = done ? tf-t : step
+        ll -= decay*Δ
+        ∫SI += S*I/pop*Δ; ∫E += E*Δ; ∫I += I*Δ; ∫R += R*Δ
+        done && break
         t += step
         nevent += 1
         u = rand(rng)*rate
@@ -257,6 +274,7 @@ regular_part!(
             if b > 0
                 expos!(P,i,b); P.ellI[i] -= 1; P.ellE[i] += 1
             end
+            nT += 1
         elseif u < transmission+progression
             b, lw = color_change(tr,P,i,k,t,true,rng;proposal,guided)
             ll += lw
@@ -264,13 +282,19 @@ regular_part!(
             if b > 0
                 infec!(P,i,b); P.ellE[i] -= 1; P.ellI[i] += 1
             end
+            nP += 1
         elseif u < transmission+progression+recovery
             P.I[i] -= 1; P.R[i] += 1
+            nR += 1
         else
             P.R[i] -= 1; P.S[i] += 1
+            nW += 1
         end
     end
     P.ll[i] = ll
+    st = @view P.stats[:,i]
+    st[1] += nT; st[2] += nP; st[3] += nR; st[4] += nW
+    st[7] += ∫SI; st[8] += ∫E; st[9] += ∫I; st[10] += ∫R
     nevent
 end
 
@@ -305,11 +329,15 @@ singular_part!(
         P.ll[i] += log(total)
         if rand(rng)*total ≥ nondestructive
             P.I[i] -= 1
+            P.stats[6,i] += 1
+        else
+            P.stats[5,i] += 1
         end
     elseif tr.type[k] == Sample         # the sampled lineage continues
         expos!(P,i,tr.parlin[k])
         infec!(P,i,chillins[1])
         P.ll[i] += log(ψ)
+        P.stats[5,i] += 1
     elseif S == 0
         P.ll[i] = -Inf
     else                                # branch: one child in I, the other in E
@@ -323,6 +351,7 @@ singular_part!(
             infec!(P,i,chillins[2]); P.ll[i] += log(total/w2)
         end
         P.ll[i] += log(β*S/(pop*(E+1)))
+        P.stats[1,i] += 1
         P.ellE[i] += 1
         P.S[i] -= 1; P.E[i] += 1
     end
@@ -335,7 +364,9 @@ end
 The result of running `pfilter` on a [`Tree`](@ref PhyloPOMP.FastSEIR.Tree).
 `logLik`, `eff_sample_size`, and `cond_logLik` extract the log likelihood
 estimate and, for each interval, the effective sample size and the
-conditional log likelihood.
+conditional log likelihood.  `suffstats` holds estimates of the
+expectations, given the genealogy, of the complete-data sufficient
+statistics (see [`em`](@ref PhyloPOMP.FastSEIR.em)).
 """
 struct FastPfilterd
     "log likelihood estimate"
@@ -348,6 +379,8 @@ struct FastPfilterd
     zero_fraction::Vector{Float64}
     "number of population events simulated"
     nevents::Int
+    "estimated expectations of the sufficient statistics given the genealogy"
+    suffstats::SuffStats
 end
 
 POMP.logLik(pf::FastPfilterd) = pf.logLik
@@ -404,6 +437,7 @@ POMP.pfilter(
     seed = rand(rng,UInt64)
     loglik = 0.0
     nevents = 0
+    suff = SuffStats(ntuple(_->NaN,length(STATS)))   # set at the end
     ## apply the events at the initial time
     k0 = findlast(==(tr.time[1]),tr.time)
     for j ∈ 1:k0
@@ -421,7 +455,7 @@ POMP.pfilter(
             n
         end
         llmax = maximum(P.ll)
-        isfinite(llmax) || return FastPfilterd(-Inf,ess,cll,zerofrac,nevents)
+        isfinite(llmax) || return FastPfilterd(-Inf,ess,cll,zerofrac,nevents,suff)
         W .*= exp.(P.ll .- llmax)
         s = sum(W)
         cll[k] = llmax+log(s)
@@ -429,6 +463,8 @@ POMP.pfilter(
         W ./= s
         ess[k] = 1/sum(abs2,W)
         zerofrac[k] = count(iszero,W)/Np
+        ## the particles' paths approximate the smoothing distribution
+        k == M && (suff = SuffStats(Tuple(P.stats*W)))
         P.ll .= 0.0
         if ess[k] ≤ trigger*Np
             systematic!(ancestors,W,rng)
@@ -439,7 +475,7 @@ POMP.pfilter(
             W .= 1/Np
         end
     end
-    FastPfilterd(loglik,ess,cll,zerofrac,nevents)
+    FastPfilterd(loglik,ess,cll,zerofrac,nevents,suff)
 end
 
 """
@@ -564,7 +600,7 @@ rates(θ) = (β=θ.β, σ=θ.σ, γ=θ.γ, ω=θ.ω, ψ=θ.ψ, χ=θ.χ, pop=rou
 
 ## set each particle to its initial state, with no lineages
 initialize!(P::Particles, params) = begin
-    P.ellE .= 0; P.ellI .= 0; P.col .= 0; P.ll .= 0.0
+    P.ellE .= 0; P.ellI .= 0; P.col .= 0; P.ll .= 0.0; P.stats .= 0.0
     for (i,θ) ∈ enumerate(params)
         P.S[i], P.E[i], P.I[i], P.R[i] =
             barycentric(Int64,(θ.S0,θ.E0,θ.I0,θ.R0),round(Int,θ.pop))
@@ -584,6 +620,115 @@ end
 average(params, avfun) = begin
     names = keys(first(params))
     NamedTuple{names}(map(n -> avfun(getfield.(params,n)),names))
+end
+
+"""
+    FastEMd
+
+The result of running `em` on a [`Tree`](@ref PhyloPOMP.FastSEIR.Tree).
+`coef` returns the parameter estimate, `traces` the parameters and log
+likelihood at each iteration, and `logLik`, `eff_sample_size`, and
+`cond_logLik` the results of a final `pfilter` at the estimate.
+"""
+struct FastEMd{P<:NamedTuple}
+    "result of `pfilter` at the final parameter estimate"
+    pf::FastPfilterd
+    "parameters at the start and after each iteration"
+    trace::Vector{P}
+    "log likelihood estimated in each iteration, at the parameters it started from"
+    logLik::Vector{Float64}
+end
+
+POMP.logLik(m::FastEMd) = logLik(m.pf)
+POMP.eff_sample_size(m::FastEMd) = eff_sample_size(m.pf)
+POMP.cond_logLik(m::FastEMd) = cond_logLik(m.pf)
+POMP.coef(m::FastEMd) = m.trace[end]
+POMP.traces(m::FastEMd) = POMP.melt(
+    [merge(p,(logLik=l,)) for (p,l) ∈ zip(m.trace,[m.logLik...,logLik(m.pf)])],
+    :iteration,
+)
+
+"""
+    em(tr::Tree; Np = 1, Nem = 1, estimate = (:β, :σ, :γ, :ω, :ψ),
+       gain = n -> 1,
+       β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02, χ = 0.0,
+       pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08,
+       proposal = :local, guided = true, threaded = true,
+       rng = default_rng())
+
+Monte Carlo expectation-maximization for the rates named in `estimate`
+(any of `β`, `σ`, `γ`, `ω`, `ψ`, `χ`), starting from the given model
+parameters.  Were the history of the population process known, the
+maximum likelihood estimate of each rate would be the number of events of
+the corresponding type divided by the integral over time of its
+per-unit-rate hazard: for example, the number of transmissions divided by
+∫ S I / pop dt for `β`.  Each iteration runs `pfilter`, which estimates
+the expectations of these sufficient statistics given the genealogy (see
+`suffstats` in [`FastPfilterd`](@ref PhyloPOMP.FastSEIR.FastPfilterd)),
+and sets the rates to their complete-data estimates.  The expectations
+can be averaged over iterations by stochastic approximation: iteration
+`n` moves the running averages a fraction `gain(n)` of the way to the new
+estimates; `gain(n) = 1`, the default, gives Monte Carlo EM.
+
+EM converges slowly when most of the information about a rate is missing,
+as it is for the transmission rate given a genealogy: each iteration
+moves the logarithm of a rate by the score divided by the complete-data
+information, which can greatly exceed the observed information.
+
+Returns a [`FastEMd`](@ref PhyloPOMP.FastSEIR.FastEMd) object.
+"""
+em(
+    tr::Tree;
+    Np::Integer = 1,
+    Nem::Integer = 1,
+    estimate = (:β,:σ,:γ,:ω,:ψ),
+    gain::Function = n -> 1,
+    β = 4.0, σ = 1.0, γ = 1.0, ω = 1.0, ψ = 0.02, χ = 0.0,
+    pop = 100, S0 = 0.9, E0 = 0.0, I0 = 0.02, R0 = 0.08,
+    proposal::Symbol = :local,
+    guided::Bool = true,
+    threaded::Bool = true,
+    rng::AbstractRNG = default_rng(),
+) = begin
+    est = Tuple(estimate)
+    @assert est ⊆ (:β,:σ,:γ,:ω,:ψ,:χ) "only the rates β, σ, γ, ω, ψ, χ can be estimated"
+    θ = merge(map(Float64,(;β,σ,γ,ω,ψ,χ,S0,E0,I0,R0)),(;pop))
+    trace = [θ]
+    logliks = Float64[]
+    s = nothing
+    for n ∈ 1:Nem
+        pf = pfilter(tr; Np, θ..., proposal, guided, threaded, rng)
+        isfinite(logLik(pf)) || error("in iteration $n, no particle is compatible with the genealogy")
+        s = isnothing(s) ? pf.suffstats : map((a,b) -> a+gain(n)*(b-a),s,pf.suffstats)
+        mle = complete_mle(s)
+        θ = merge(θ,NamedTuple{est}(map(x -> mle[x],est)))
+        push!(logliks,logLik(pf))
+        push!(trace,θ)
+    end
+    FastEMd(pfilter(tr; Np, θ..., proposal, guided, threaded, rng),trace,logliks)
+end
+
+## complete-data maximum likelihood estimates of the rates
+complete_mle(s) = (
+    β = s.transmissions/s.SI, σ = s.progressions/s.E,
+    γ = s.recoveries/s.I, ω = s.wanings/s.R,
+    ψ = s.samples/s.I, χ = s.destructive/s.I,
+)
+
+"""
+    score(pf::FastPfilterd; β, σ, γ, ω, ψ, χ, _...)
+
+Estimate the derivatives of the log likelihood with respect to the
+logarithms of the rates, by Fisher's identity, from the sufficient
+statistics of `pf`, a `pfilter` run with the given rates.
+"""
+score(pf::FastPfilterd; β, σ, γ, ω, ψ, χ, _...) = begin
+    s = pf.suffstats
+    (
+        β = s.transmissions-β*s.SI, σ = s.progressions-σ*s.E,
+        γ = s.recoveries-γ*s.I, ω = s.wanings-ω*s.R,
+        ψ = s.samples-ψ*s.I, χ = s.destructive-χ*s.I,
+    )
 end
 
 ## Apply `f(P, i, rng)` to each particle `i` and return the sum of the

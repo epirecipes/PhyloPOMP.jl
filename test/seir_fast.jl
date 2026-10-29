@@ -68,6 +68,21 @@ using PhyloPOMP.FastSEIR.Demes: Expos, Infec
     ## the perturbations use the global generator, so seed both
     @test coef(fit(5)) == coef(mf)
 
+    @info h2("expectation-maximization")
+    s = pfilter(tr, Np=500, rng=Xoshiro(23)).suffstats
+    ## every path contains all the samples (none destructive, since χ = 0) and
+    ## a transmission at each branch point
+    @test s.samples ≈ count(==(PhyloPOMP.Sample), tr.type)
+    @test s.destructive == 0
+    @test s.transmissions > count(==(PhyloPOMP.Node), tr.type)
+    ef = FastSEIR.em(tr; Np=1000, Nem=10, estimate=(:β,:γ), start..., rng=Xoshiro(6))
+    @test ef isa FastSEIR.FastEMd
+    @test length(ef.trace) == 11 && length(ef.logLik) == 10
+    @test size(traces(ef)) == (11, 13)
+    @test coef(ef).σ == 1.0 && coef(ef).pop == 100
+    ## from the poor start, EM raises the recovery rate towards its estimate
+    @test coef(ef).γ > start.γ + 0.03
+
 end
 
 end

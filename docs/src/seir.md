@@ -177,3 +177,24 @@ mf = mif(
 )
 map(x -> round(x, digits = 2), coef(mf)[(:β, :γ)]), round(logLik(mf), digits = 1)
 ```
+
+Rates can also be estimated by Monte Carlo expectation-maximization with
+`FastSEIR.em`, which needs no perturbations: each iteration sets the
+rates to their complete-data estimates, given the expected sufficient
+statistics that `pfilter` returns.
+
+```@example
+using Random: Xoshiro
+using PhyloPOMP
+using PhyloPOMP.FastSEIR
+using PhyloPOMP.FastSEIR.Demes: Expos, Infec
+
+g = parse_newick(FastSEIR.seir_trees[1], time = 50.0)
+tr = FastSEIR.Tree(g, fsmarkov(Expos=>0.1, Infec=>1, (Expos,Infec)=>1))
+ef = FastSEIR.em(
+    tr, Np = 1000, Nem = 20, estimate = (:β, :γ),
+    β = 8.0, γ = 0.5,
+    rng = Xoshiro(1066),
+)
+map(x -> round(x, digits = 2), coef(ef)[(:β, :γ)]), round(logLik(ef), digits = 1)
+```
