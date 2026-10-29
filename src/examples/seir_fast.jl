@@ -184,14 +184,14 @@ end
 
 ## Propose the change of coloring that accompanies a transmission (a
 ## lineage may pass from I to E; `toI = false`) or a progression (a
-## lineage may pass from E to I; `toI = true`) in particle `i` at time `t`
-## in interval `k`.  Returns the lineage that changes deme (zero for none)
-## and the log importance weight.
+## lineage may pass from E to I; `toI = true`) in particle `i`, with
+## counts `E`, `I`, `ellE`, `ellI`, at time `t` in interval `k`.  Returns
+## the lineage that changes deme (zero for none) and the log importance
+## weight.
 color_change(
-    tr::Tree, P::Particles, i, k, t, toI::Bool, rng;
+    tr::Tree, P::Particles, i, k, t, toI::Bool, E, I, ellE, ellI, rng;
     proposal, guided,
 ) = begin
-    E, I, ellE, ellI = P.E[i], P.I[i], P.ellE[i], P.ellI[i]
     ## exact weights of no change and of a change of any one lineage
     φ0, φb = toI ?
         (@indicator(E > ellE, (I+1-ellI)/(I+1)), 1/(I+1)) :
@@ -222,8 +222,9 @@ color_change(
 end
 
 ## Simulate the population process of particle `i` over interval `k`
-## (Gillespie algorithm), proposing color changes along the way.  Returns
-## the number of population events.
+## (Gillespie algorithm), proposing color changes along the way.  The
+## state is kept in local variables and stored at the end.  Returns the
+## number of population events.
 regular_part!(
     tr::Tree, P::Particles, i, k, p, rng;
     proposal, guided,
@@ -231,10 +232,11 @@ regular_part!(
     (; β, σ, γ, ω, ψ, χ, pop) = p
     t = tr.time[k]
     tf = tr.tend[k]
+    S, E, I, R = P.S[i], P.E[i], P.I[i], P.R[i]
+    ellE, ellI = P.ellE[i], P.ellI[i]
     ll = P.ll[i]
     nevent = 0
     while true
-        S, E, I, R, ellI = P.S[i], P.E[i], P.I[i], P.R[i], P.ellI[i]
         transmission = β*S*I/pop
         progression = σ*E
         recovery = @indicator(I > ellI, γ*I)
@@ -251,25 +253,27 @@ regular_part!(
         nevent += 1
         u = rand(rng)*rate
         if u < transmission
-            b, lw = color_change(tr,P,i,k,t,false,rng;proposal,guided)
+            b, lw = color_change(tr,P,i,k,t,false,E,I,ellE,ellI,rng;proposal,guided)
             ll += lw
-            P.S[i] -= 1; P.E[i] += 1
+            S -= 1; E += 1
             if b > 0
-                expos!(P,i,b); P.ellI[i] -= 1; P.ellE[i] += 1
+                expos!(P,i,b); ellI -= 1; ellE += 1
             end
         elseif u < transmission+progression
-            b, lw = color_change(tr,P,i,k,t,true,rng;proposal,guided)
+            b, lw = color_change(tr,P,i,k,t,true,E,I,ellE,ellI,rng;proposal,guided)
             ll += lw
-            P.E[i] -= 1; P.I[i] += 1
+            E -= 1; I += 1
             if b > 0
-                infec!(P,i,b); P.ellE[i] -= 1; P.ellI[i] += 1
+                infec!(P,i,b); ellE -= 1; ellI += 1
             end
         elseif u < transmission+progression+recovery
-            P.I[i] -= 1; P.R[i] += 1
+            I -= 1; R += 1
         else
-            P.R[i] -= 1; P.S[i] += 1
+            R -= 1; S += 1
         end
     end
+    P.S[i], P.E[i], P.I[i], P.R[i] = S, E, I, R
+    P.ellE[i], P.ellI[i] = ellE, ellI
     P.ll[i] = ll
     nevent
 end
@@ -432,9 +436,7 @@ POMP.pfilter(
         P.ll .= 0.0
         if ess[k] ≤ trigger*Np
             systematic!(ancestors,W,rng)
-            for (j,a) ∈ enumerate(ancestors)
-                copyparticle!(Q,j,P,a)
-            end
+            copyparticles!(Q,P,ancestors,threaded)
             P, Q = Q, P
             W .= 1/Np
         end
@@ -541,8 +543,8 @@ POMP.mif(
             loglik += llmax+log(s/Np)
             W ./= s
             systematic!(ancestors,W,rng)
+            copyparticles!(Q,P,ancestors,threaded)
             for (j,a) ∈ enumerate(ancestors)
-                copyparticle!(Q,j,P,a)
                 work[j] = params[a]
             end
             P, Q = Q, P
@@ -589,19 +591,47 @@ end
 ## Apply `f(P, i, rng)` to each particle `i` and return the sum of the
 ## results.  The particles are dealt into chunks, each with its own
 ## random-number stream determined by `seed` and `stream`, so that the
-## results do not depend on the number of threads.
+## results do not depend on the number of threads.  Dealing (rather than
+## dividing) spreads the copies of each resampled particle, which are
+## adjacent, over the chunks, and so balances the work.
 foreach_particle(
     f, P::Particles, seed, stream, threaded::Bool,
 ) = begin
     Np = length(P.ll)
     nchunk = min(64,Np)
     counts = zeros(Int,nchunk)
-    work(c) = begin
+    foreach_chunk(nchunk,threaded) do c
         rng = Xoshiro(hash((seed,stream,c)))
+        n = 0
         for i ∈ c:nchunk:Np
-            counts[c] += f(P,i,rng)
+            n += f(P,i,rng)
+        end
+        counts[c] = n
+    end
+    sum(counts)
+end
+
+## copy particle `ancestors[j]` of `P` into position `j` of `Q`, for each `j`
+copyparticles!(
+    Q::Particles, P::Particles, ancestors, threaded::Bool,
+) = begin
+    Np = length(ancestors)
+    nchunk = min(64,Np)
+    foreach_chunk(nchunk,threaded) do c
+        for j ∈ chunk(c,nchunk,Np)
+            copyparticle!(Q,j,P,ancestors[j])
         end
     end
+    Q
+end
+
+## the particles in chunk `c` of `nchunk`
+chunk(c, nchunk, Np) = div((c-1)*Np,nchunk)+1:div(c*Np,nchunk)
+
+## Call `work(c)` for each chunk `c`, on all available threads if `threaded`.
+foreach_chunk(
+    work, nchunk, threaded::Bool,
+) = begin
     if threaded && nthreads() > 1
         @threads :static for c ∈ 1:nchunk
             work(c)
@@ -609,7 +639,7 @@ foreach_particle(
     else
         foreach(work,1:nchunk)
     end
-    sum(counts)
+    nothing
 end
 
 ## systematic resampling: ancestor indices for normalized weights `w`
